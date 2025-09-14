@@ -1,4 +1,4 @@
-// Prisma schema for ZK Steam prototype
+// Prisma schema for TideQuest
 
 generator client {
   provider = "prisma-client-js"
@@ -9,65 +9,155 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id            String   @id @default(uuid())
-  walletAddress String?  @unique
-  steamId       String?  @unique
-  createdAt     DateTime @default(now())
-  proofs        Proof[]
+model Account {
+  id            String      @id @default(uuid())
+  walletAddress String      @unique
+  nickname      String?
+  description   String?     @db.Text
+  accountTypeId String
+  accountType   AccountType @relation(fields: [accountTypeId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  proofs                  Proof[]
+  recommendRequests       RecommendRequest[]
+  recommendResults        RecommendResult[]
+  recommendResultFeedback RecommendResultFeedback[]
+  recommendResultLikes    RecommendResultLike[]
 }
 
-model Game {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  proofs    Proof[]
+model AccountType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  accounts Account[]
 }
 
 model Proof {
-  id         String   @id @default(uuid())
-  user       User     @relation(fields: [userId], references: [id])
-  userId     String
-  game       Game?    @relation(fields: [gameId], references: [id])
-  gameId     String?
-  provider   String
-  verified   Boolean  @default(false)
-  proofJson  Json
-  claimedAt  DateTime @default(now())
-  createdAt  DateTime @default(now())
+  id          String    @id @default(uuid())
+  userId      String
+  user        Account   @relation(fields: [userId], references: [id])
+  proofTypeId String
+  proofType   ProofType @relation(fields: [proofTypeId], references: [id])
+  title       String?
+  description String?   @db.Text
+  provider    String
+  proofData   Json
+  status      String    @default("pending")
+  sessionId   String?   @unique // Prevent duplicate proofs
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([sessionId])
+  @@index([userId])
 }
 
-model Category {
-  id        Int      @id @default(autoincrement())
-  name      String
-  createdAt DateTime @default(now())
-  items     Item[]
+model ProofType {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String?  @db.Text
+  formatSchema Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  proofs Proof[]
 }
 
 model Item {
-  id                    Int              @id @default(autoincrement())
-  title                 String           @db.VarChar(255)
-  description           String?          @db.Text
-  categoryId            Int?
-  category              Category?        @relation(fields: [categoryId], references: [id])
-  createdAt             DateTime         @default(now())
-  recommendations       Recommendation[] @relation("ItemRecommendations")
-  recommendedByItems    Recommendation[] @relation("RecommendedItems")
+  id         String   @id @default(uuid())
+  itemTypeId String
+  itemType   ItemType @relation(fields: [itemTypeId], references: [id])
+  name       String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  steamGameDetails  ItemSteamGame[]
+  recommendRequests RecommendRequest[]
+  recommendResults  RecommendResult[]
 }
 
-model Recommendation {
-  id                  Int      @id @default(autoincrement())
-  itemId              Int
-  item                Item     @relation("ItemRecommendations", fields: [itemId], references: [id], onDelete: Cascade)
-  recommendedItemId   Int
-  recommendedItem     Item     @relation("RecommendedItems", fields: [recommendedItemId], references: [id], onDelete: Cascade)
-  score               Decimal? @db.Decimal(4, 3)
-  rank                Int      @default(0)
-  createdAt           DateTime @default(now())
+model ItemType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?  @db.Text
+  schema      Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@unique([itemId, recommendedItemId])
-  @@index([itemId])
-  @@index([score(sort: Desc)])
+  items Item[]
 }
 
+model ItemSteamGame {
+  steamAppId     String   @id
+  itemId         String
+  item           Item     @relation(fields: [itemId], references: [id])
+  gameName       String
+  storeUrl       String?
+  additionalData Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model RecommendRequest {
+  id                 String   @id @default(uuid())
+  itemId             String
+  item               Item     @relation(fields: [itemId], references: [id])
+  requesterAccountId String
+  requesterAccount   Account  @relation(fields: [requesterAccountId], references: [id])
+  status             String   @default("pending")
+  requestDetails     String?  @db.Text
+  parameters         Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  recommendResults RecommendResult[]
+}
+
+model RecommendResult {
+  id                   String            @id @default(uuid())
+  itemId               String
+  item                 Item              @relation(fields: [itemId], references: [id])
+  recommendRequestId   String?
+  recommendRequest     RecommendRequest? @relation(fields: [recommendRequestId], references: [id])
+  recommenderAccountId String
+  recommenderAccount   Account           @relation(fields: [recommenderAccountId], references: [id])
+  recommendationText   String            @db.Text
+  rating               Float?
+  recommendationData   Json?
+  status               String            @default("active")
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  feedback RecommendResultFeedback[]
+  likes    RecommendResultLike[]
+}
+
+model RecommendResultFeedback {
+  id                String          @id @default(uuid())
+  recommendResultId String
+  recommendResult   RecommendResult @relation(fields: [recommendResultId], references: [id])
+  feedbackAccountId String
+  feedbackAccount   Account         @relation(fields: [feedbackAccountId], references: [id])
+  feedbackType      String
+  rating            Float?
+  comment           String?         @db.Text
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model RecommendResultLike {
+  id                String          @id @default(uuid())
+  recommendResultId String
+  recommendResult   RecommendResult @relation(fields: [recommendResultId], references: [id])
+  accountId         String
+  account           Account         @relation(fields: [accountId], references: [id])
+  isLiked           Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([recommendResultId, accountId])
+}

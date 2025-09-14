@@ -1,0 +1,24 @@
+{
+  "name": "tidequest-docs",
+  "version": "1.0.0",
+  "description": "Documentation for TideQuest API",
+  "scripts": {
+    "build": "node build.js",
+    "serve": "serve dist -l 3001",
+    "dev": "npm run build && npm run serve",
+    "watch": "concurrently \"nodemon build.js\" \"npm run serve\"",
+    "lint": "spectral lint openapi.yaml",
+    "lint:fix": "spectral lint openapi.yaml --format pretty",
+    "validate": "swagger-codegen-cli validate -i openapi.yaml",
+    "prebuild": "mkdir -p dist && npm run lint"
+  },
+  "dependencies": {
+    "swagger-ui-dist": "^5.9.0"
+  },
+  "devDependencies": {
+    "serve": "^14.2.1",
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.1",
+    "@stoplight/spectral-cli": "^6.5.0"
+  }
+}

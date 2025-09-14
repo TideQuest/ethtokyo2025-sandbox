@@ -151,15 +151,17 @@
     Ready to fetch Steam data
   </div>
 
-  <button id="fetchBtn">Fetch Steam User Data</button>
+  <!-- Ethereum wallet address check removed -->
 
-  <button id="clearBtn" class="clear-btn">Clear Data</button>
+  <!-- Auto-fetch on open: fetch/clear buttons removed -->
 
   <div style="margin-top:12px; border-top:1px solid #eee; padding-top:12px;">
     <div style="font-weight:bold; margin-bottom:6px;">ZK Proof (Reclaim)</div>
-    <div style="display:flex; gap:6px; margin-bottom:6px;">
-      <input id="appIdInput" type="text" placeholder="App ID (e.g. 730 for CS:GO)" style="flex:1; padding:6px; font-size:12px;" />
-      <small style="color:#666; font-size:11px;">Optional: Prove ownership of a specific game</small>
+    <div style="display:flex; flex-direction: column; gap:6px; margin-bottom:6px;">
+      <select id="appSelect" style="width:100%; padding:6px; font-size:12px;">
+        <option value="" disabled selected>Fetch data, then select a game</option>
+      </select>
+      <small style="color:#666; font-size:11px;">Select a game from your owned list to prove ownership</small>
     </div>
     <button id="genProofBtn">Generate ZK Proof (via Backend)</button>
     <div id="proofStatus" class="status" style="margin-top:8px; display:none;"></div>
@@ -169,12 +171,10 @@
   <div class="tab-container">
     <div class="tab active" data-tab="overview">Overview</div>
     <div class="tab" data-tab="games">Games</div>
-    <div class="tab" data-tab="wishlist">Wishlist</div>
-    <div class="tab" data-tab="tags">Tags</div>
   </div>
 
   <div class="data-container" id="dataContainer">
-    <div class="no-data">Click "Fetch Steam User Data" to get started</div>
+    <div class="no-data">No data yet</div>
   </div>
 
   <script src="popup.js"></script>

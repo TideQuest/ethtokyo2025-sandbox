@@ -67,6 +67,7 @@ services:
     env_file: .env
     environment:
       NODE_ENV: development
+      POSTGRES_HOST: db
     ports:
       - "3000:3000"
     volumes:

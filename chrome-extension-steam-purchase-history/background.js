@@ -26,20 +26,38 @@ async function fetchSteamUserData() {
 
     console.log('Fetching Steam userdata from:', userDataUrl);
 
-    const response = await fetch(userDataUrl, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'X-Requested-With': 'XMLHttpRequest'
+    let responseText = null;
+    // 1) Try SW fetch (may miss SameSite cookies)
+    try {
+      const response = await fetch(userDataUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      if (response.ok) {
+        responseText = await response.text();
       }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    } catch (e) {
+      console.warn('SW fetch failed:', e);
     }
 
-    const responseText = await response.text();
+    // 2) Try page-context fetch only if current tab is store.steampowered.com
+    if (!isLikelyJson(responseText) && currentTab.url && currentTab.url.includes('store.steampowered.com')) {
+      try {
+        responseText = await fetchUserdataInPageContext(currentTab.id, userDataUrl);
+      } catch (e) {
+        console.warn('Page-context fetch failed:', e);
+      }
+    }
+
+    // 3) Ensure store.steampowered.com origin (first-party cookies)
+    if (!isLikelyJson(responseText)) {
+      responseText = await fetchUserdataViaStoreOrigin(userDataUrl);
+    }
+
     let userData = parseSteamUserData(responseText);
 
     userData = await enrichGameData(userData);
@@ -161,6 +179,82 @@ async function findUserDataUrl(tabId) {
   }
 }
 
+function isLikelyJson(text) {
+  if (!text || typeof text !== 'string') return false;
+  const s = text.trim();
+  return s.startsWith('{') || s.startsWith('[');
+}
+
+// Fetch userdata via the page context to include first-party cookies even when SW can't send them
+async function fetchUserdataInPageContext(tabId, url) {
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: async (userDataUrl) => {
+      try {
+        const r = await fetch(userDataUrl, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+        return await r.text();
+      } catch (err) {
+        return JSON.stringify({ _pageFetchError: err?.message || String(err) });
+      }
+    },
+    args: [url]
+  });
+  return result?.result || '';
+}
+
+// Ensure a store.steampowered.com tab exists and fetch there so SameSite cookies are included
+async function fetchUserdataViaStoreOrigin(userDataUrl) {
+  const storeTabs = await chrome.tabs.query({ url: 'https://store.steampowered.com/*' });
+  let targetTabId = storeTabs[0]?.id;
+  let createdTabId = null;
+  if (!targetTabId) {
+    const created = await chrome.tabs.create({ url: 'https://store.steampowered.com/', active: false });
+    targetTabId = created.id;
+    createdTabId = created.id;
+  }
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: targetTabId },
+      world: 'MAIN',
+      func: async (url) => {
+        const ensureReady = () => new Promise((resolve) => {
+          if (document.readyState === 'complete') return resolve();
+          window.addEventListener('load', () => resolve(), { once: true });
+        });
+        try {
+          await ensureReady();
+          // Optional: surface cookie presence for debugging
+          // const cookies = document.cookie;
+          const r = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Accept': 'application/json, text/javascript, */*; q=0.01',
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+          return await r.text();
+        } catch (err) {
+          return JSON.stringify({ _storeFetchError: err?.message || String(err) });
+        }
+      },
+      args: [userDataUrl]
+    });
+    return result?.result || '';
+  } finally {
+    // Keep the created tab to avoid re-opening on subsequent calls. If you prefer to close it, uncomment:
+    // if (createdTabId) chrome.tabs.remove(createdTabId);
+  }
+}
+
 function parseSteamUserData(responseText) {
   try {
     const jsonData = JSON.parse(responseText);
@@ -169,10 +263,8 @@ function parseSteamUserData(responseText) {
       steamId: jsonData.steamid || 'unknown',
       countryCode: jsonData.country_code || 'JP',
       ownedGames: [],
-      wishlist: [],
       recentlyPlayed: [],
       accountBalance: jsonData.wallet ? jsonData.wallet.formatted_balance : 'unknown',
-      recommendedTags: [],
       hardwareUsed: jsonData.rgHardwareUsed || [],
       primaryLanguage: jsonData.rgPrimaryLanguage || 'unknown'
     };
@@ -186,21 +278,7 @@ function parseSteamUserData(responseText) {
       }));
     }
 
-    if (jsonData.rgWishlist && Array.isArray(jsonData.rgWishlist)) {
-      userData.wishlist = jsonData.rgWishlist.map(appId => ({
-        appId: appId.toString(),
-        name: `App ${appId}`,
-        priority: 0,
-        source: 'rgWishlist'
-      }));
-    }
-
-    if (jsonData.rgRecommendedTags && Array.isArray(jsonData.rgRecommendedTags)) {
-      userData.recommendedTags = jsonData.rgRecommendedTags.map(tag => ({
-        tagId: tag.tagid,
-        name: tag.name
-      }));
-    }
+    // Wishlist and recommended tags removed
 
     if (jsonData.rgRecentlyPlayed && Array.isArray(jsonData.rgRecentlyPlayed)) {
       userData.recentlyPlayed = jsonData.rgRecentlyPlayed.map(game => ({
@@ -221,8 +299,6 @@ function parseSteamUserData(responseText) {
 
     console.log('Parsed Steam userdata:', {
       ownedGames: userData.ownedGames.length,
-      wishlist: userData.wishlist.length,
-      recommendedTags: userData.recommendedTags.length,
       hardwareUsed: userData.hardwareUsed,
       primaryLanguage: userData.primaryLanguage
     });
@@ -278,23 +354,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "getUserDataUrlAndCookies") {
     (async () => {
       try {
-        const tabs = await chrome.tabs.query({
-          active: true,
-          currentWindow: true,
-        });
-        const currentTab = tabs[0];
+        let [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!currentTab) throw new Error("No active tab");
 
-        if (
-          !currentTab.url ||
-          (!currentTab.url.includes("steampowered.com") &&
-            !currentTab.url.includes("steamcommunity.com"))
-        ) {
-          throw new Error("Please visit Steam website first");
+        // If the active tab isn't Steam, try to find any open Steam tab across all windows
+        const isSteamTab = (t) => !!t.url && (t.url.includes('steampowered.com') || t.url.includes('steamcommunity.com'));
+        if (!isSteamTab(currentTab)) {
+          const steamTabs = await chrome.tabs.query({ url: [
+            'https://store.steampowered.com/*',
+            'https://steamcommunity.com/*'
+          ]});
+          if (steamTabs && steamTabs.length > 0) {
+            // Prefer most recently active
+            currentTab = steamTabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+          } else {
+            throw new Error("Please visit Steam website first");
+          }
         }
 
-        // Reuse the existing detector to build the userdata URL
-        const userDataInfo = await (async () => {
+        // Try to detect Steam ID from the page first
+        let userDataInfo = await (async () => {
           const results = await chrome.scripting.executeScript({
             target: { tabId: currentTab.id },
             func: () => {
@@ -340,20 +419,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return results[0]?.result;
         })();
 
+        // If not found in page, fall back to parsing cookies for SteamID
+        // Look into steamLoginSecure/steamLogin cookie values which often embed the 17-digit SteamID
+        let storeCookies = await chrome.cookies.getAll({ domain: 'steampowered.com' });
+        let communityCookies = await chrome.cookies.getAll({ domain: 'steamcommunity.com' });
+        const allCookies = [...storeCookies, ...communityCookies];
+
+        if (!userDataInfo) {
+          const loginCookie = allCookies.find(c => c.name === 'steamLoginSecure') || allCookies.find(c => c.name === 'steamLogin');
+          if (loginCookie && loginCookie.value) {
+            try {
+              const decoded = decodeURIComponent(loginCookie.value);
+              const match = decoded.match(/(\d{17})/);
+              if (match && match[1]) {
+                const steamId = match[1];
+                userDataInfo = {
+                  steamId,
+                  url: `https://store.steampowered.com/dynamicstore/userdata/?id=${steamId}&cc=JP`,
+                };
+              }
+            } catch {}
+          }
+        }
+
         if (!userDataInfo) throw new Error("Could not determine Steam user ID");
 
-        // Build cookie string for store.steampowered.com
-        const cookies = await chrome.cookies.getAll({
-          domain: "steampowered.com",
-        });
-        const storeCookies = cookies.filter(
-          (c) =>
-            c.domain.endsWith("steampowered.com") ||
-            c.domain.endsWith(".steampowered.com")
+        // Build cookie string for store.steampowered.com only (target endpoint domain)
+        storeCookies = storeCookies.filter(
+          (c) => c.domain.endsWith('steampowered.com') || c.domain.endsWith('.steampowered.com')
         );
-        const cookieStr = storeCookies
-          .map((c) => `${c.name}=${c.value}`)
-          .join("; ");
+        const cookieStr = storeCookies.map((c) => `${c.name}=${c.value}`).join('; ');
 
         sendResponse({ success: true, data: { ...userDataInfo, cookieStr } });
       } catch (err) {
@@ -363,11 +458,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Ethereum address check removed
+
   if (request.action === 'clearData') {
     steamUserData = null;
     lastFetchTime = 0;
     chrome.storage.local.clear();
     sendResponse({ success: true });
+  }
+  
+  // Open Steam tab only (no auto-opening extension UI)
+  if (request.action === 'openSteamAndExtension') {
+    (async () => {
+      try {
+        const url = request.steamUrl || 'https://store.steampowered.com/';
+        const createdTab = await chrome.tabs.create({ url, active: true });
+        sendResponse({ success: true, steamTabId: createdTab.id });
+      } catch (e) {
+        sendResponse({ success: false, error: e?.message || String(e) });
+      }
+    })();
+    return true;
   }
 });
 
@@ -583,31 +694,7 @@ async function enrichGameData(userData) {
     // Continue without enrichment if API fails
   }
 
-  // Also enrich wishlist if available
-  if (userData.wishlist && userData.wishlist.length > 0) {
-    console.log(`Starting enrichment for ${userData.wishlist.length} wishlist items`);
-    const wishlistAppIds = userData.wishlist.map(item => item.appId);
-
-    try {
-      const wishlistDetails = await fetchAppDetails(wishlistAppIds);
-      console.log('Wishlist details received:', wishlistDetails);
-
-      userData.wishlist = userData.wishlist.map(item => {
-        if (wishlistDetails[item.appId]) {
-          return {
-            ...item,
-            name: wishlistDetails[item.appId].name,
-            type: wishlistDetails[item.appId].type,
-            developers: wishlistDetails[item.appId].developers,
-            genres: wishlistDetails[item.appId].genres
-          };
-        }
-        return item;
-      });
-    } catch (error) {
-      console.error('Error during wishlist enrichment:', error);
-    }
-  }
+  // Wishlist enrichment removed
 
   console.log('Enrichment completed');
   return userData;
@@ -626,20 +713,37 @@ async function fetchSteamUserDataManual(steamId) {
 
     console.log('Fetching Steam userdata from (manual):', userDataUrl);
 
-    const response = await fetch(userDataUrl, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'X-Requested-With': 'XMLHttpRequest'
+    let responseText = null;
+    // 1) Try SW fetch
+    try {
+      const response = await fetch(userDataUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      if (response.ok) {
+        responseText = await response.text();
       }
-    });
+    } catch {}
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    // 2) Try page-context on active tab if it's Steam
+    if (!isLikelyJson(responseText)) {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const currentTab = tabs[0];
+      if (currentTab && currentTab.url && (currentTab.url.includes('steampowered.com') || currentTab.url.includes('steamcommunity.com'))) {
+        try {
+          responseText = await fetchUserdataInPageContext(currentTab.id, userDataUrl);
+        } catch {}
+      }
     }
 
-    const responseText = await response.text();
+    // 3) Try store-origin tab
+    if (!isLikelyJson(responseText)) {
+      responseText = await fetchUserdataViaStoreOrigin(userDataUrl);
+    }
     let userData = parseSteamUserData(responseText);
 
     userData = await enrichGameData(userData);

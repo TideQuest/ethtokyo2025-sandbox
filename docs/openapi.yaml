@@ -1,0 +1,967 @@
+openapi: 3.0.3
+info:
+  title: TideQuest API
+  description: API specification for TideQuest - Decentralized identity verification platform
+  version: 1.0.0
+  contact:
+    name: TideQuest Team
+    url: https://github.com/TideQuest/ethtokyo2025-sandbox
+servers:
+  - url: http://localhost:3000
+    description: Development server
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Items
+    description: Item management operations
+  - name: Categories
+    description: Category management operations
+  - name: Recommendations
+    description: Recommendation system operations
+  - name: NL2SQL
+    description: Natural language to SQL query operations
+  - name: ZKP
+    description: Zero-knowledge proof operations
+
+paths:
+  /api/health:
+    get:
+      operationId: healthCheck
+      summary: Health check endpoint
+      description: Returns server health status and timestamp
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  ts:
+                    type: string
+                    format: date-time
+
+  /api/items:
+    get:
+      operationId: getAllItems
+      summary: Get all items
+      description: Retrieve all items with optional category filtering
+      tags:
+        - Items
+      parameters:
+        - in: query
+          name: categoryId
+          schema:
+            type: integer
+          description: Filter items by category ID
+      responses:
+        '200':
+          description: List of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      operationId: createItem
+      summary: Create new item
+      description: Create a new item with title, description, and category
+      tags:
+        - Items
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                description:
+                  type: string
+                categoryId:
+                  type: integer
+                  minimum: 1
+              required:
+                - title
+      responses:
+        '201':
+          description: Item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /api/items/{id}:
+    get:
+      operationId: getItemById
+      summary: Get specific item
+      description: Retrieve a specific item by ID with recommendations
+      tags:
+        - Items
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: Item ID
+      responses:
+        '200':
+          description: Item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemWithRecommendations'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      operationId: updateItem
+      summary: Update item
+      description: Update an existing item's properties
+      tags:
+        - Items
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                description:
+                  type: string
+                categoryId:
+                  type: integer
+                  nullable: true
+                  minimum: 1
+      responses:
+        '200':
+          description: Item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+
+    delete:
+      operationId: deleteItem
+      summary: Delete item
+      description: Delete an existing item by ID
+      tags:
+        - Items
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Item deleted successfully
+        '500':
+          description: Server error
+
+  /api/categories:
+    get:
+      operationId: getAllCategories
+      summary: Get all categories
+      description: Retrieve all categories with item counts
+      tags:
+        - Categories
+      responses:
+        '200':
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryWithCount'
+
+    post:
+      operationId: createCategory
+      summary: Create new category
+      description: Create a new category with name
+      tags:
+        - Categories
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+              required:
+                - name
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          description: Validation error
+
+  /api/categories/{id}:
+    get:
+      operationId: getCategoryById
+      summary: Get specific category with items
+      description: Retrieve a specific category by ID with associated items
+      tags:
+        - Categories
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Category details with items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryWithItems'
+        '404':
+          description: Category not found
+
+    put:
+      operationId: updateCategory
+      summary: Update category
+      description: Update an existing category's properties
+      tags:
+        - Categories
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+              required:
+                - name
+      responses:
+        '200':
+          description: Category updated successfully
+
+    delete:
+      operationId: deleteCategory
+      summary: Delete category
+      description: Delete an existing category by ID
+      tags:
+        - Categories
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Category deleted successfully
+        '400':
+          description: Cannot delete category with existing items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  itemCount:
+                    type: integer
+
+  /api/recommendations:
+    get:
+      operationId: getAllRecommendations
+      summary: Get all recommendations
+      description: Retrieve all recommendations with optional filtering
+      tags:
+        - Recommendations
+      parameters:
+        - in: query
+          name: itemId
+          schema:
+            type: integer
+          description: Filter by item ID
+        - in: query
+          name: minScore
+          schema:
+            type: number
+            minimum: 0
+            maximum: 1
+          description: Minimum score threshold
+      responses:
+        '200':
+          description: List of recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecommendationWithItems'
+
+    post:
+      operationId: createRecommendation
+      summary: Create new recommendation
+      description: Create a new recommendation between items
+      tags:
+        - Recommendations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                itemId:
+                  type: integer
+                  minimum: 1
+                recommendedItemId:
+                  type: integer
+                  minimum: 1
+                score:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                rank:
+                  type: integer
+                  minimum: 0
+              required:
+                - itemId
+                - recommendedItemId
+      responses:
+        '201':
+          description: Recommendation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationWithItems'
+        '400':
+          description: Validation error or invalid item IDs
+
+  /api/recommendations/bulk:
+    post:
+      operationId: createBulkRecommendations
+      summary: Create multiple recommendations
+      description: Create multiple recommendations for an item in bulk
+      tags:
+        - Recommendations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                itemId:
+                  type: integer
+                  minimum: 1
+                recommendations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      recommendedItemId:
+                        type: integer
+                        minimum: 1
+                      score:
+                        type: number
+                        minimum: 0
+                        maximum: 1
+                      rank:
+                        type: integer
+                        minimum: 0
+                    required:
+                      - recommendedItemId
+              required:
+                - itemId
+                - recommendations
+      responses:
+        '201':
+          description: Bulk recommendations created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: integer
+                  itemId:
+                    type: integer
+
+  /api/recommendations/item/{itemId}:
+    get:
+      operationId: getRecommendationsForItem
+      summary: Get recommendations for specific item
+      description: Retrieve recommendations for a specific item with optional limit
+      tags:
+        - Recommendations
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Limit number of recommendations
+      responses:
+        '200':
+          description: Item recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecommendationWithItem'
+
+    delete:
+      operationId: deleteRecommendationsForItem
+      summary: Delete all recommendations for an item
+      description: Delete all recommendations associated with a specific item
+      tags:
+        - Recommendations
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recommendations deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+
+  /api/recommendations/{id}:
+    get:
+      operationId: getRecommendationById
+      summary: Get specific recommendation
+      description: Retrieve a specific recommendation by ID
+      tags:
+        - Recommendations
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recommendation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationWithItems'
+        '404':
+          description: Recommendation not found
+
+    put:
+      operationId: updateRecommendation
+      summary: Update recommendation
+      description: Update an existing recommendation's score and rank
+      tags:
+        - Recommendations
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                score:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                rank:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Recommendation updated successfully
+
+    delete:
+      operationId: deleteRecommendation
+      summary: Delete recommendation
+      description: Delete a specific recommendation by ID
+      tags:
+        - Recommendations
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Recommendation deleted successfully
+
+  /api/nl2sql/query:
+    post:
+      operationId: executeNL2SQLQuery
+      summary: Execute natural language to SQL query
+      description: Convert natural language question to SQL and execute it
+      tags:
+        - NL2SQL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+              required:
+                - question
+      responses:
+        '200':
+          description: Query executed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sql:
+                    type: string
+                  rows:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          description: Invalid request body
+        '500':
+          description: Query execution failed
+
+  /api/nl2sql/test:
+    get:
+      operationId: testNL2SQL
+      summary: Test NL2SQL with predefined question
+      description: Test the NL2SQL service with a predefined question
+      tags:
+        - NL2SQL
+      responses:
+        '200':
+          description: Test query results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  question:
+                    type: string
+                  sql:
+                    type: string
+                  rows:
+                    type: array
+                    items:
+                      type: object
+
+  /api/zkp/request:
+    post:
+      operationId: createZKProofRequest
+      summary: Create ZK proof request
+      description: Create a zero-knowledge proof request for verification
+      tags:
+        - ZKP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                providerId:
+                  type: string
+      responses:
+        '200':
+          description: Proof request created
+          content:
+            application/json:
+              schema:
+                type: object
+        '500':
+          description: Failed to create proof request
+
+  /api/zkp/verify:
+    post:
+      operationId: verifyZKProof
+      summary: Verify ZK proof
+      description: Verify a zero-knowledge proof submission
+      tags:
+        - ZKP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionId:
+                  type: string
+                provider:
+                  type: string
+                payload:
+                  type: object
+      responses:
+        '200':
+          description: Proof verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified:
+                    type: boolean
+        '400':
+          description: Invalid proof format
+
+  /api/zkp/test/mock:
+    post:
+      operationId: createMockZKProof
+      summary: Create mock proof for testing
+      description: Create a mock zero-knowledge proof for testing purposes
+      tags:
+        - ZKP
+      responses:
+        '200':
+          description: Mock proof created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  proofId:
+                    type: string
+
+  /api/zkp/steam/proof:
+    post:
+      operationId: createSteamZKProof
+      summary: Create Steam ZK proof
+      description: Create a zero-knowledge proof for Steam platform data
+      tags:
+        - ZKP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                steamId:
+                  type: string
+                userDataUrl:
+                  type: string
+                  format: uri
+                cookieStr:
+                  type: string
+                targetAppId:
+                  type: string
+              required:
+                - steamId
+                - userDataUrl
+                - cookieStr
+      responses:
+        '200':
+          description: Steam proof created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Invalid request parameters
+        '500':
+          description: Failed to create Steam proof
+
+  /api/zkp/steam/verify:
+    post:
+      operationId: verifySteamZKProof
+      summary: Verify Steam ZK proof
+      description: Verify a zero-knowledge proof for Steam platform data
+      tags:
+        - ZKP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proof:
+                  type: object
+                steamId:
+                  type: string
+                targetAppId:
+                  type: string
+              required:
+                - proof
+                - steamId
+      responses:
+        '200':
+          description: Steam proof verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  verified:
+                    type: boolean
+        '400':
+          description: Invalid verification parameters
+        '500':
+          description: Failed to verify Steam proof
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        walletAddress:
+          type: string
+          nullable: true
+        steamId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Game:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Proof:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        gameId:
+          type: string
+          format: uuid
+          nullable: true
+        provider:
+          type: string
+        verified:
+          type: boolean
+        proofJson:
+          type: object
+        claimedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CategoryWithCount:
+      allOf:
+        - $ref: '#/components/schemas/Category'
+        - type: object
+          properties:
+            _count:
+              type: object
+              properties:
+                items:
+                  type: integer
+
+    CategoryWithItems:
+      allOf:
+        - $ref: '#/components/schemas/Category'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Item'
+
+    Item:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        categoryId:
+          type: integer
+          nullable: true
+        category:
+          $ref: '#/components/schemas/Category'
+        createdAt:
+          type: string
+          format: date-time
+        _count:
+          type: object
+          properties:
+            recommendations:
+              type: integer
+
+    ItemWithRecommendations:
+      allOf:
+        - $ref: '#/components/schemas/Item'
+        - type: object
+          properties:
+            recommendations:
+              type: array
+              items:
+                $ref: '#/components/schemas/RecommendationWithItem'
+
+    Recommendation:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        recommendedItemId:
+          type: integer
+        score:
+          type: number
+          nullable: true
+        rank:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    RecommendationWithItems:
+      allOf:
+        - $ref: '#/components/schemas/Recommendation'
+        - type: object
+          properties:
+            item:
+              $ref: '#/components/schemas/Item'
+            recommendedItem:
+              $ref: '#/components/schemas/Item'
+
+    RecommendationWithItem:
+      allOf:
+        - $ref: '#/components/schemas/Recommendation'
+        - type: object
+          properties:
+            recommendedItem:
+              allOf:
+                - $ref: '#/components/schemas/Item'
+                - type: object
+                  properties:
+                    category:
+                      $ref: '#/components/schemas/Category'
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: array
+          items:
+            type: object

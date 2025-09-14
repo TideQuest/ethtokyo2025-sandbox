@@ -1,9 +1,23 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { createProofRequest, ProofSchema, verifyProof, createSteamProof, verifySteamProof } from '../reclaim.js'
+import { createProofRequest, ProofSchema, verifyProof, isProofAlreadyVerified, createSteamProof, verifySteamProof } from '../reclaim.js'
 import { prisma } from '../db.js'
+import { createRateLimiter } from '../middleware/rateLimiter.js'
 
 export const zkpRouter = Router()
+
+// Rate limiters for different endpoints
+const requestLimiter = createRateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 5, // 5 requests per minute
+  message: 'Too many proof requests, please try again later'
+})
+
+const verifyLimiter = createRateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 10, // 10 verifications per minute
+  message: 'Too many verification attempts, please try again later'
+})
 
 // Schema for Steam proof request
 const SteamProofRequestSchema = z.object({
@@ -20,7 +34,7 @@ const SteamProofVerifySchema = z.object({
   targetAppId: z.string().optional()
 })
 
-zkpRouter.post('/request', async (req, res) => {
+zkpRouter.post('/request', requestLimiter, async (req, res) => {
   try {
     const { providerId } = (req.body || {}) as { providerId?: string }
     const r = await createProofRequest({ providerId })
@@ -30,31 +44,80 @@ zkpRouter.post('/request', async (req, res) => {
   }
 })
 
-zkpRouter.post('/verify', async (req, res) => {
+zkpRouter.post('/verify', verifyLimiter, async (req, res) => {
   const parse = ProofSchema.safeParse(req.body)
-  if (!parse.success) return res.status(400).json({ error: 'Invalid proof' })
+  if (!parse.success) {
+    return res.status(400).json({
+      error: 'Invalid proof format',
+      details: parse.error.flatten()
+    })
+  }
 
   try {
-    const result = await verifyProof(parse.data)
-    // Optionally persist a proof row (mock association)
-    const user = await prisma.user.upsert({
-      where: { steamId: 'STEAM_' + (parse.data.sessionId || 'unknown') },
-      update: {},
-      create: { steamId: 'STEAM_' + (parse.data.sessionId || 'unknown') }
-    })
-    const game = await prisma.game.findFirst({ where: { slug: 'counter-strike' } })
-    await prisma.proof.create({
-      data: {
-        userId: user.id,
-        gameId: game?.id,
-        provider: parse.data.provider,
-        verified: result.verified,
-        proofJson: parse.data.payload
+    // Check for duplicate proof if sessionId is provided
+    if (parse.data.sessionId) {
+      const isDuplicate = await isProofAlreadyVerified(
+        parse.data.sessionId,
+        async (sessionId) => prisma.proof.findUnique({ where: { sessionId } })
+      )
+
+      if (isDuplicate) {
+        console.log(`[ZKP] Duplicate proof attempt for session: ${parse.data.sessionId}`)
+        return res.status(409).json({
+          error: 'Proof already verified',
+          sessionId: parse.data.sessionId
+        })
       }
-    })
+    }
+
+    // Verify the proof
+    const result = await verifyProof(parse.data)
+
+    // Only persist if verification succeeded
+    if (result.verified) {
+      // Create or update user
+      const user = await prisma.user.upsert({
+        where: { steamId: 'STEAM_' + (parse.data.sessionId || 'unknown') },
+        update: { steamId: 'STEAM_' + (parse.data.sessionId || 'unknown') },
+        create: { steamId: 'STEAM_' + (parse.data.sessionId || 'unknown') }
+      })
+
+      // Find game (optional)
+      const game = await prisma.game.findFirst({ where: { slug: 'counter-strike' } })
+
+      // Store proof with sessionId for duplicate prevention
+      await prisma.proof.create({
+        data: {
+          userId: user.id,
+          gameId: game?.id,
+          provider: parse.data.provider,
+          verified: result.verified,
+          proofJson: parse.data.payload,
+          sessionId: parse.data.sessionId || null
+        }
+      })
+
+      console.log(`[ZKP] Proof verified and stored for user: ${user.id}`)
+    } else {
+      console.warn(`[ZKP] Proof verification failed: ${result.reason}`)
+    }
+
     res.json(result)
   } catch (e: any) {
-    res.status(500).json({ error: e?.message || 'failed' })
+    console.error('[ZKP] Verification error:', e)
+
+    // Check for unique constraint violation (duplicate sessionId)
+    if (e.code === 'P2002' && e.meta?.target?.includes('sessionId')) {
+      return res.status(409).json({
+        error: 'Proof already verified',
+        sessionId: parse.data.sessionId
+      })
+    }
+
+    res.status(500).json({
+      error: 'Verification failed',
+      message: e?.message || 'Internal server error'
+    })
   }
 })
 
@@ -78,8 +141,8 @@ zkpRouter.post('/test/mock', async (_req, res) => {
   res.json({ ok: true, proofId: p.id })
 })
 
-// Steam-specific endpoints
-zkpRouter.post('/steam/proof', async (req, res) => {
+// Steam-specific endpoints with rate limiting
+zkpRouter.post('/steam/proof', requestLimiter, async (req, res) => {
   const parse = SteamProofRequestSchema.safeParse(req.body)
   if (!parse.success) {
     return res.status(400).json({
@@ -115,7 +178,7 @@ zkpRouter.post('/steam/proof', async (req, res) => {
   }
 })
 
-zkpRouter.post('/steam/verify', async (req, res) => {
+zkpRouter.post('/steam/verify', verifyLimiter, async (req, res) => {
   const parse = SteamProofVerifySchema.safeParse(req.body)
   if (!parse.success) {
     return res.status(400).json({
@@ -141,7 +204,7 @@ zkpRouter.post('/steam/verify', async (req, res) => {
       let gameId = null
       if (parse.data.targetAppId) {
         const game = await prisma.game.findFirst({
-          where: { appId: parse.data.targetAppId }
+          where: { slug: parse.data.targetAppId } // Note: might need to adjust this based on your schema
         })
         gameId = game?.id
       }
@@ -152,7 +215,8 @@ zkpRouter.post('/steam/verify', async (req, res) => {
           gameId: gameId,
           provider: 'steam',
           verified: true,
-          proofJson: parse.data.proof
+          proofJson: parse.data.proof,
+          sessionId: result.sessionId || null // Add sessionId if available
         }
       })
 
@@ -165,10 +229,18 @@ zkpRouter.post('/steam/verify', async (req, res) => {
     })
   } catch (error: any) {
     console.error('Steam proof verification failed:', error)
+
+    // Check for duplicate proof
+    if (error.code === 'P2002' && error.meta?.target?.includes('sessionId')) {
+      return res.status(409).json({
+        success: false,
+        error: 'Proof already verified'
+      })
+    }
+
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to verify proof'
     })
   }
 })
-

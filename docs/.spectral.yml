@@ -1,0 +1,5 @@
+extends: ["spectral:oas"]
+
+rules:
+  # Disable unused component warnings for future schemas
+  oas3-unused-component: warn
