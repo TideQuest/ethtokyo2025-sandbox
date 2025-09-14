@@ -1,15 +1,28 @@
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOllama } from '@langchain/ollama';
 import { getCuratorPrompt } from '../config/curators.js';
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
+// 環境変数でLLMプロバイダーを選択
+const LLM_PROVIDER = process.env.LLM_PROVIDER || 'ollama'
 
-const chat = new ChatOllama({
-  baseUrl: OLLAMA_BASE_URL,
-  model: OLLAMA_MODEL,
-  temperature: 0.7,
-  numCtx: 2048
-});
+const getLLM = () => {
+  if (LLM_PROVIDER === 'gemini') {
+    return new ChatGoogleGenerativeAI({
+      model: 'gemini-1.5-flash',
+      temperature: 0.7,
+      apiKey: process.env.GOOGLE_API_KEY,
+    });
+  } else {
+    return new ChatOllama({
+      baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+      model: process.env.OLLAMA_MODEL || 'llama3',
+      temperature: 0.7,
+      numCtx: 2048
+    });
+  }
+};
+
+const llm = getLLM();
 
 export async function getCuratorRecommendation(
   curatorId: string, 
@@ -20,10 +33,12 @@ export async function getCuratorRecommendation(
   try {
     const prompt = getCuratorPrompt(curatorId, game);
     
-    const response = await chat.invoke(prompt);
+    const response = await llm.invoke(prompt);
     const content = typeof response.content === 'string' 
       ? response.content 
       : String(response.content);
+    
+    console.log('LLM Response:', content.substring(0, 200) + '...');
     
     // JSONパースを試行
     let recommendations;
