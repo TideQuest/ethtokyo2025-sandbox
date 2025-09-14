@@ -6,9 +6,16 @@ until node -e "require('net').createConnection({host: 'db', port: 5432}).on('con
   sleep 1
 done
 
-echo "[entrypoint] Prisma generate/migrate"
+echo "[entrypoint] Prisma generate"
 pnpm prisma generate
-pnpm prisma migrate deploy || pnpm prisma db push
+
+echo "[entrypoint] Applying database schema"
+# Try to apply migrations first, if they exist
+pnpm prisma migrate deploy 2>/dev/null || true
+
+# Always sync schema with db push to ensure all tables exist
+echo "[entrypoint] Syncing database schema"
+pnpm prisma db push --skip-generate --accept-data-loss
 
 echo "[entrypoint] Seeding database (idempotent)"
 pnpm tsx prisma/seed.ts || true
