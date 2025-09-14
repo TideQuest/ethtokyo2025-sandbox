@@ -13,5 +13,17 @@
   };
 
   document.addEventListener('click', handleClick, { capture: true });
-})();
 
+  // Bridge: when popup stores a new proof, forward it into the page
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      if (changes.latestSteamProof && changes.latestSteamProof.newValue) {
+        const payload = changes.latestSteamProof.newValue;
+        window.postMessage({ type: 'STEAM_PROOF_FROM_EXTENSION', data: payload }, '*');
+      }
+    });
+  } catch (e) {
+    // no-op if storage not available in this context
+  }
+})();

@@ -6,17 +6,21 @@ const router = Router();
 const prisma = new PrismaClient();
 
 const CreateCategorySchema = z.object({
-  name: z.string().min(1).max(100)
+  name: z.string().min(1).max(100),
+  description: z.string().optional(),
+  schema: z.any().optional()
 });
 
 const UpdateCategorySchema = z.object({
-  name: z.string().min(1).max(100)
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().optional(),
+  schema: z.any().optional()
 });
 
-// GET /api/categories - Get all categories
+// GET /api/categories - Get all item types (categories)
 router.get('/', async (req, res) => {
   try {
-    const categories = await prisma.category.findMany({
+    const categories = await prisma.itemType.findMany({
       include: {
         _count: {
           select: {
@@ -36,13 +40,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/categories/:id - Get single category with items
+// GET /api/categories/:id - Get single item type (category) with items
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
-      where: { id: parseInt(id) },
+    const category = await prisma.itemType.findUnique({
+      where: { id: id },
       include: {
         items: {
           orderBy: {
@@ -63,12 +67,12 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/categories - Create new category
+// POST /api/categories - Create new item type (category)
 router.post('/', async (req, res) => {
   try {
     const validatedData = CreateCategorySchema.parse(req.body);
 
-    const category = await prisma.category.create({
+    const category = await prisma.itemType.create({
       data: validatedData
     });
 
@@ -85,14 +89,14 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/categories/:id - Update category
+// PUT /api/categories/:id - Update item type (category)
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const validatedData = UpdateCategorySchema.parse(req.body);
 
-    const category = await prisma.category.update({
-      where: { id: parseInt(id) },
+    const category = await prisma.itemType.update({
+      where: { id: id },
       data: validatedData
     });
 
@@ -109,14 +113,14 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/categories/:id - Delete category
+// DELETE /api/categories/:id - Delete item type (category)
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
     // Check if category has items
-    const category = await prisma.category.findUnique({
-      where: { id: parseInt(id) },
+    const category = await prisma.itemType.findUnique({
+      where: { id: id },
       include: {
         _count: {
           select: {
@@ -137,8 +141,8 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    await prisma.category.delete({
-      where: { id: parseInt(id) }
+    await prisma.itemType.delete({
+      where: { id: id }
     });
 
     res.status(204).send();

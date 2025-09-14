@@ -1,52 +1,54 @@
-import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Router } from 'express'
+import { PrismaClient } from '@prisma/client'
 import { z } from 'zod';
 
-const router = Router();
-const prisma = new PrismaClient();
+// NOTE: Updated to match current Prisma schema (Item IDs are strings; games via ItemSteamGame)
+
+const router = Router()
+const prisma = new PrismaClient()
+
+// GET /api/items - List items (games) with Steam details
 
 const CreateItemSchema = z.object({
-  title: z.string().min(1).max(255),
-  description: z.string().optional(),
-  categoryId: z.number().int().positive().optional()
+  name: z.string().min(1).max(255),
+  itemTypeId: z.string().uuid(),
+  metadata: z.any().optional()
 });
 
 const UpdateItemSchema = z.object({
-  title: z.string().min(1).max(255).optional(),
-  description: z.string().optional(),
-  categoryId: z.number().int().positive().nullable().optional()
+  name: z.string().min(1).max(255).optional(),
+  itemTypeId: z.string().uuid().optional(),
+  metadata: z.any().optional()
 });
 
 // GET /api/items - Get all items
 router.get('/', async (req, res) => {
   try {
-    const { categoryId } = req.query;
+    const { itemTypeId } = req.query;
 
-    const where = categoryId
-      ? { categoryId: parseInt(categoryId as string) }
+    const where = itemTypeId
+      ? { itemTypeId: itemTypeId as string }
       : {};
 
     const items = await prisma.item.findMany({
-      where,
       include: {
-        category: true,
+        itemType: true,
+        steamGameDetails: true,
         _count: {
           select: {
-            recommendations: true
+            recommendResults: true
           }
         }
       },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+      orderBy: { createdAt: 'desc' },
+    })
 
-    res.json(items);
+    res.json(items)
   } catch (error) {
-    console.error('Error fetching items:', error);
-    res.status(500).json({ error: 'Failed to fetch items' });
+    console.error('Error fetching items:', error)
+    res.status(500).json({ error: 'Failed to fetch items' })
   }
-});
+})
 
 // GET /api/items/:id - Get single item
 router.get('/:id', async (req, res) => {
@@ -54,18 +56,11 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const item = await prisma.item.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: id },
       include: {
-        category: true,
-        recommendations: {
-          include: {
-            recommendedItem: true
-          },
-          orderBy: [
-            { rank: 'asc' },
-            { score: 'desc' }
-          ]
-        }
+        itemType: true,
+        steamGameDetails: true,
+        recommendResults: true
       }
     });
 
@@ -88,7 +83,7 @@ router.post('/', async (req, res) => {
     const item = await prisma.item.create({
       data: validatedData,
       include: {
-        category: true
+        itemType: true
       }
     });
 
@@ -112,10 +107,10 @@ router.put('/:id', async (req, res) => {
     const validatedData = UpdateItemSchema.parse(req.body);
 
     const item = await prisma.item.update({
-      where: { id: parseInt(id) },
+      where: { id: id },
       data: validatedData,
       include: {
-        category: true
+        itemType: true
       }
     });
 
@@ -138,7 +133,7 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
 
     await prisma.item.delete({
-      where: { id: parseInt(id) }
+      where: { id: id }
     });
 
     res.status(204).send();

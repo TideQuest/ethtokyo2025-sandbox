@@ -17,6 +17,9 @@
     "migrate": "prisma migrate deploy || prisma db push",
     "seed": "tsx prisma/seed.ts"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@langchain/core": "^0.3.75",
     "@langchain/google-genai": "^0.2.17",
@@ -40,7 +43,7 @@
     "supertest": "^7.1.4",
     "tsx": "^4.16.2",
     "typescript": "^5.5.4",
-    "vitest": "^2.0.5"
+    "vitest": "^2.1.9"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

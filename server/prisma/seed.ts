@@ -153,19 +153,71 @@ async function main() {
   // Create Steam Games from the Discord data
   const gamesData = [
     // Standard games
-    { appId: '413150', name: 'Stardew Valley', storeUrl: 'https://store.steampowered.com/app/413150/Stardew_Valley/' },
-    { appId: '1290000', name: 'PowerWash Simulator', storeUrl: 'https://store.steampowered.com/app/1290000/PowerWash_Simulator/' },
-    { appId: '1868140', name: 'DAVE THE DIVER', storeUrl: 'https://store.steampowered.com/app/1868140/DAVE_THE_DIVER/' },
-    { appId: '1245620', name: 'ELDEN RING', storeUrl: 'https://store.steampowered.com/app/1245620/ELDEN_RING/' },
-    { appId: '268910', name: 'Cuphead', storeUrl: 'https://store.steampowered.com/app/268910/Cuphead/' },
+    {
+      appId: "413150",
+      name: "Stardew Valley",
+      storeUrl: "https://store.steampowered.com/app/413150/Stardew_Valley/",
+    },
+    {
+      appId: "1290000",
+      name: "PowerWash Simulator",
+      storeUrl:
+        "https://store.steampowered.com/app/1290000/PowerWash_Simulator/",
+    },
+    {
+      appId: "1868140",
+      name: "DAVE THE DIVER",
+      storeUrl: "https://store.steampowered.com/app/1868140/DAVE_THE_DIVER/",
+    },
+    {
+      appId: "1245620",
+      name: "ELDEN RING",
+      storeUrl: "https://store.steampowered.com/app/1245620/ELDEN_RING/",
+    },
+    {
+      appId: "268910",
+      name: "Cuphead",
+      storeUrl: "https://store.steampowered.com/app/268910/Cuphead/",
+    },
+    // eFootball (requested)
+    {
+      appId: "1665460",
+      name: "eFootball™",
+      storeUrl: "https://store.steampowered.com/app/1665460/eFootball/",
+    },
     // VR games
-    { appId: '620980', name: 'Beat Saber', storeUrl: 'https://store.steampowered.com/app/620980/Beat_Saber/' },
-    { appId: '1575520', name: 'Fruit Ninja VR 2', storeUrl: 'https://store.steampowered.com/app/1575520/Fruit_Ninja_VR_2/' },
-    { appId: '617830', name: 'SUPERHOT VR', storeUrl: 'https://store.steampowered.com/app/617830/SUPERHOT_VR/' },
-    { appId: '690620', name: 'Downward Spiral: Horus Station', storeUrl: 'https://store.steampowered.com/app/690620/Downward_Spiral_Horus_Station/' },
-    { appId: '448280', name: 'Job Simulator', storeUrl: 'https://store.steampowered.com/app/448280/Job_Simulator/' },
-    { appId: '450390', name: 'The Lab', storeUrl: 'https://store.steampowered.com/app/450390/The_Lab/' },
-  ]
+    {
+      appId: "620980",
+      name: "Beat Saber",
+      storeUrl: "https://store.steampowered.com/app/620980/Beat_Saber/",
+    },
+    {
+      appId: "1575520",
+      name: "Fruit Ninja VR 2",
+      storeUrl: "https://store.steampowered.com/app/1575520/Fruit_Ninja_VR_2/",
+    },
+    {
+      appId: "617830",
+      name: "SUPERHOT VR",
+      storeUrl: "https://store.steampowered.com/app/617830/SUPERHOT_VR/",
+    },
+    {
+      appId: "690620",
+      name: "Downward Spiral: Horus Station",
+      storeUrl:
+        "https://store.steampowered.com/app/690620/Downward_Spiral_Horus_Station/",
+    },
+    {
+      appId: "448280",
+      name: "Job Simulator",
+      storeUrl: "https://store.steampowered.com/app/448280/Job_Simulator/",
+    },
+    {
+      appId: "450390",
+      name: "The Lab",
+      storeUrl: "https://store.steampowered.com/app/450390/The_Lab/",
+    },
+  ];
 
   const games = await Promise.all(
     gamesData.map(async (game) => {
@@ -176,9 +228,10 @@ async function main() {
           metadata: {
             appId: game.appId,
             storeUrl: game.storeUrl,
+            ...(game as any).metadata,
           },
         },
-      })
+      });
 
       await prisma.itemSteamGame.create({
         data: {
@@ -186,8 +239,9 @@ async function main() {
           itemId: item.id,
           gameName: game.name,
           storeUrl: game.storeUrl,
+          additionalData: (game as any).additionalData,
         },
-      })
+      });
 
       return item
     })
@@ -202,7 +256,7 @@ async function main() {
       sourceGame: 'Stardew Valley',
       targetGame: 'PowerWash Simulator',
       recommender: accounts[0],
-      text: 'Stardew Valleyで畑を耕し牧場が整っていくのをみて癒やされた体験を持つプレイヤーなら、ジャンルは違いますが、高圧洗浄機でひたすら汚れを落としていくPowerWash Simulatorは、「無心で作業し綺麗になっていく達成感」という点は同様の癒やしを提供してくれます。コツコツ作業して満足感を得たいというユーザーにおススメです。',
+      text: 'If you enjoyed the relaxing experience of tending fields and watching your farm grow in Stardew Valley, PowerWash Simulator offers a similar sense of satisfaction. Though the genre is different, the mindful process of cleaning with a pressure washer provides the same therapeutic feeling of "accomplishment from focused work." Perfect for players who enjoy steady progress and satisfying results.',
       rating: 4.5,
     },
     // Combination 2: Stardew Valley → DAVE THE DIVER
@@ -210,7 +264,7 @@ async function main() {
       sourceGame: 'Stardew Valley',
       targetGame: 'DAVE THE DIVER',
       recommender: accounts[0],
-      text: 'DAVE THE DIVERは、資源を集めてお店をアップグレードする、また資源を集める…というサイクルがStardew Valleyの食物を育ててスプリンクラーを設置して…また食物を育ててというサイクルと同じです。さらに無料体験版があるので気軽に試せます。',
+      text: 'DAVE THE DIVER features a similar gameplay loop to Stardew Valley - gather resources, upgrade your shop, then gather more resources. This cycle mirrors Stardew Valley\'s pattern of growing crops, installing sprinklers, and expanding your farm. Plus, there\'s a free demo available so you can try it risk-free.',
       rating: 4.7,
     },
     // Combination 3: ELDEN RING → Cuphead
@@ -218,7 +272,7 @@ async function main() {
       sourceGame: 'ELDEN RING',
       targetGame: 'Cuphead',
       recommender: accounts[2],
-      text: '何度も挑戦するなかでプレイスキルが向上し、攻略法が思いつく…ついに難敵を乗り越える達成感。いわゆる「死にゲー」が好きなら、Cupheadも気に入るはずです。ダークな世界観とは反対の、レトロカートゥーンのようなポップなビジュアルで、「高難易度ボス戦の緊張感と達成感」だけを味わうことができます。',
+      text: 'The satisfaction of improving your skills through repeated attempts, discovering strategies, and finally overcoming challenging enemies - if you enjoy "souls-like" games, you\'ll love Cuphead. Instead of a dark atmosphere, it features retro cartoon-inspired visuals while delivering the same intense boss battles and rewarding difficulty that makes victory so satisfying.',
       rating: 4.8,
     },
     // VR Combination 1: Beat Saber → Fruit Ninja VR 2
@@ -226,7 +280,7 @@ async function main() {
       sourceGame: 'Beat Saber',
       targetGame: 'Fruit Ninja VR 2',
       recommender: accounts[1],
-      text: 'Beat Saberはリズムゲームとしての刀操作がありその爽快感が人気の理由。刀操作に関して、Fruit NinjaはObjectの斬撃判定の精度が非常に高く、切れ味の表現等が細かく没入感が高いです。リズム爽快感に対して、切断そのものの爽快感を楽しめます。',
+      text: 'Beat Saber\'s popularity comes from the satisfying sword mechanics in a rhythm game context. Fruit Ninja VR 2 takes the sword mechanics further with incredibly precise slicing detection and detailed cutting feedback that creates deep immersion. While Beat Saber offers rhythmic satisfaction, Fruit Ninja VR 2 delivers pure slicing satisfaction.',
       rating: 4.6,
     },
     // VR Combination 2: SUPERHOT VR → Horus Station
@@ -234,7 +288,7 @@ async function main() {
       sourceGame: 'SUPERHOT VR',
       targetGame: 'Downward Spiral: Horus Station',
       recommender: accounts[1],
-      text: 'SUPERHOTの「動けば時間が動く」という仕様による緊張感＋ガンアクションの楽しさが人気の理由。このゆっくりガンアクションに慣れた上で、もう少しいろんなステージとか操作をしたい時に、Horus Stationの無重力下での操作が相性良くてウケがいいです。',
+      text: 'SUPERHOT VR\'s "time moves when you move" mechanic creates unique tension combined with satisfying gunplay. Once you\'ve mastered this deliberate action style and want more variety in stages and mechanics, Horus Station\'s zero-gravity gameplay provides a perfect next step with compatible pacing and expanded movement options.',
       rating: 4.3,
     },
     // VR Combination 3: Job Simulator → The Lab
@@ -242,7 +296,7 @@ async function main() {
       sourceGame: 'Job Simulator',
       targetGame: 'The Lab',
       recommender: accounts[1],
-      text: 'Job Simulatorは基本的なVR操作のチュートリアル的なゲームですが、The Labはさらにその拡張として武器が増えていて、多様なVR体験を楽しめます。',
+      text: 'Job Simulator serves as an excellent VR tutorial game teaching basic interactions. The Lab expands on this foundation with additional mechanics including weapons and tools, offering a diverse range of VR experiences to explore.',
       rating: 4.4,
     },
     // AI-generated recommendation
@@ -352,4 +406,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect()
   })
-

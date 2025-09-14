@@ -46,6 +46,13 @@ async function generateSteamProof(targetAppId) {
     updateProofStatus('Proof generated successfully!');
     displayProofResult(result);
 
+    // Persist for content scripts to forward into the web app
+    try {
+      chrome.storage?.local?.set({ latestSteamProof: result });
+    } catch (e) {
+      console.warn('Failed to store latestSteamProof:', e);
+    }
+
     return result;
   } catch (error) {
     console.error('Proof generation failed:', error);
