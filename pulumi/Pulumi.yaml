@@ -1,0 +1,21 @@
+name: zksteam-gcp
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: GCP infrastructure for zksteam application deployment
+config:
+  gcp:project:
+    description: The GCP project to deploy into
+  region:
+    description: The GCP region to deploy into
+    default: us-central1
+  zone:
+    description: The GCP zone to deploy into
+    default: us-central1-a
+  domain:
+    description: The domain name for the application
+    default: tidequest.com
+  subdomain:
+    description: The subdomain for the application
+    default: app
