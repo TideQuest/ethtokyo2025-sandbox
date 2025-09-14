@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import { getCuratorRecommendation } from '../services/curatorService.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -59,7 +60,7 @@ router.get('/', async (req, res) => {
 router.get('/item/:itemId', async (req, res) => {
   try {
     const { itemId } = req.params;
-    const { limit = 10 } = req.query;
+    const { limit = 10, useLLM = 'false' } = req.query;
 
     const recommendations = await prisma.recommendation.findMany({
       where: { itemId: parseInt(itemId) },
@@ -76,6 +77,52 @@ router.get('/item/:itemId', async (req, res) => {
       ],
       take: parseInt(limit as string)
     });
+
+    // If no recommendations found and LLM fallback is enabled, use Ollama
+    if (recommendations.length === 0 && useLLM === 'true') {
+      // Get the item details to use as input for LLM
+      const item = await prisma.item.findUnique({
+        where: { id: parseInt(itemId) }
+      });
+
+      if (!item) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+
+      // Get curator recommendations using Ollama
+      const curatorRecommendation = await getCuratorRecommendation(
+        'vita', // Default to immersive curator
+        item.title
+      );
+
+      // Transform LLM recommendations to match the expected format
+      const llmRecommendations = curatorRecommendation.recommendations.map((rec, index) => ({
+        id: -1 * (index + 1), // Use negative IDs to indicate LLM-generated
+        itemId: parseInt(itemId),
+        recommendedItemId: null,
+        score: 0.8 - (index * 0.1), // Decreasing scores
+        rank: index,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        recommendedItem: {
+          id: null,
+          title: rec.name,
+          description: rec.reason,
+          category: { name: rec.category },
+          imageUrl: null,
+          externalUrl: null,
+          metadata: { source: 'ollama' }
+        },
+        source: 'ollama',
+        processingTime: curatorRecommendation.processingTime
+      }));
+
+      return res.json({
+        recommendations: llmRecommendations,
+        source: 'ollama',
+        message: 'No database recommendations found. Generated using LLM.'
+      });
+    }
 
     res.json(recommendations);
   } catch (error) {
