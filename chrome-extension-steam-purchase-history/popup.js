@@ -255,6 +255,12 @@ document.addEventListener("DOMContentLoaded", function () {
     chrome.storage.local.get(["zk_appid_target"], (res) => {
       if (res.zk_appid_target) appIdInput.value = res.zk_appid_target;
     });
+
+    // Load last captured Ethereum address
+    chrome.storage.local.get(["ethAccount"], (res) => {
+      const addr = res?.ethAccount?.address;
+      if (addr) setEthStatus(`Connected (last seen): ${addr}`);
+    });
   }
 
   function fetchSteamData() {
@@ -318,6 +324,13 @@ document.addEventListener("DOMContentLoaded", function () {
       const { connected, account, error } = resp.data || {};
       if (connected && account) {
         setEthStatus(`Connected: ${account}`);
+        try {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          const origin = tab?.url || '';
+          await chrome.storage.local.set({ ethAccount: { address: account, origin, ts: Date.now() } });
+        } catch (_) {
+          // ignore storage errors
+        }
       } else if (error) {
         setEthStatus(`Not connected (${error})`, true);
       } else {

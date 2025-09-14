@@ -371,6 +371,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const currentTab = tabs[0];
         if (!currentTab) throw new Error('No active tab');
 
+        // Guard against restricted schemes where injection isn't allowed
+        const url = currentTab.url || '';
+        const isRestricted =
+          url.startsWith('chrome://') ||
+          url.startsWith('edge://') ||
+          url.startsWith('about:') ||
+          url.startsWith('chrome-extension://') ||
+          url.startsWith('https://chrome.google.com/webstore');
+        if (isRestricted) {
+          sendResponse({ success: true, data: { connected: false, account: null, error: 'Restricted page (cannot inject)' } });
+          return;
+        }
+
         const [result] = await chrome.scripting.executeScript({
           target: { tabId: currentTab.id },
           world: 'MAIN',
