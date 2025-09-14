@@ -1,6 +1,7 @@
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOllama } from '@langchain/ollama';
 import { getCuratorPrompt } from '../config/curators.js';
+import { steamService } from './steamService.js';
 
 // 環境変数でLLMプロバイダーを選択
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'ollama'
@@ -24,10 +25,18 @@ const getLLM = () => {
 
 const llm = getLLM();
 
+interface EnrichedRecommendation {
+  name: string;
+  reason: string;
+  category: string;
+  steamAppId: number | null;
+  steamUrl: string | null;
+}
+
 export async function getCuratorRecommendation(
-  curatorId: string, 
+  curatorId: string,
   game: string
-): Promise<{ curator: string; inputGame: string; recommendations: any[]; processingTime: number }> {
+): Promise<{ curator: string; inputGame: string; recommendations: EnrichedRecommendation[]; processingTime: number }> {
   const startTime = Date.now();
   
   try {
@@ -53,7 +62,7 @@ export async function getCuratorRecommendation(
       // 推薦配列の検証
       if (parsed.recommendations && Array.isArray(parsed.recommendations) && parsed.recommendations.length > 0) {
         // 各推薦項目の検証
-        const validRecommendations = parsed.recommendations.filter(rec =>
+        const validRecommendations = parsed.recommendations.filter((rec: any) =>
           rec.name &&
           rec.reason &&
           rec.category &&
@@ -73,23 +82,52 @@ export async function getCuratorRecommendation(
       console.warn('パース対象コンテンツ:', content.substring(0, 500));
       recommendations = getFallbackRecommendations(curatorId, game);
     }
-    
+
+    // Enrich recommendations with Steam information
+    const enrichedRecommendations: EnrichedRecommendation[] = await Promise.all(
+      recommendations.map(async (rec: any) => {
+        const steamInfo = await steamService.enrichGameWithSteamInfo(rec.name);
+        return {
+          name: rec.name,
+          reason: rec.reason,
+          category: rec.category,
+          steamAppId: steamInfo.steamAppId,
+          steamUrl: steamInfo.steamUrl
+        };
+      })
+    );
+
     const processingTime = (Date.now() - startTime) / 1000;
     
     return {
       curator: curatorId,
       inputGame: game,
-      recommendations,
+      recommendations: enrichedRecommendations,
       processingTime
     };
   } catch (error) {
     console.error('キュレーター推薦エラー:', error);
     const processingTime = (Date.now() - startTime) / 1000;
-    
+
+    // Enrich fallback recommendations with Steam information
+    const fallbackRecs = getFallbackRecommendations(curatorId, game);
+    const enrichedFallbackRecommendations: EnrichedRecommendation[] = await Promise.all(
+      fallbackRecs.map(async (rec: any) => {
+        const steamInfo = await steamService.enrichGameWithSteamInfo(rec.name);
+        return {
+          name: rec.name,
+          reason: rec.reason,
+          category: rec.category,
+          steamAppId: steamInfo.steamAppId,
+          steamUrl: steamInfo.steamUrl
+        };
+      })
+    );
+
     return {
       curator: curatorId,
       inputGame: game,
-      recommendations: getFallbackRecommendations(curatorId, game),
+      recommendations: enrichedFallbackRecommendations,
       processingTime
     };
   }
@@ -150,5 +188,5 @@ function getFallbackRecommendations(curatorId: string, inputGame: string): any[]
     ]
   };
 
-  return fallbacks[curatorId] || fallbacks.vita;
+  return fallbacks[curatorId as keyof typeof fallbacks] || fallbacks.vita;
 }

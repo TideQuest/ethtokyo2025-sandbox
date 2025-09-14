@@ -156,5 +156,5 @@ export function getCuratorPrompt(curatorId: string, game: string): string {
 `
   };
 
-  return prompts[curatorId] || prompts.vita;
+  return prompts[curatorId as keyof typeof prompts] || prompts.vita;
 }
