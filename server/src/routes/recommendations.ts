@@ -110,8 +110,12 @@ router.get('/item/:itemId', async (req, res) => {
           description: rec.reason,
           category: { name: rec.category },
           imageUrl: null,
-          externalUrl: null,
-          metadata: { source: 'ollama' }
+          externalUrl: rec.steamUrl,
+          metadata: {
+            source: 'ollama',
+            steamAppId: rec.steamAppId,
+            steamUrl: rec.steamUrl
+          }
         },
         source: 'ollama',
         processingTime: curatorRecommendation.processingTime
