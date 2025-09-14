@@ -39,3 +39,5 @@ server/prisma/*.db-journal
 .vscode/
 
 server/.pnpm-store/
+
+.specstory/
