@@ -278,6 +278,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         setProofStatus("Proof generated successfully!");
         showProofOutput(result);
+
+        // Persist the latest proof so the content script can forward it to the web app
+        try {
+          chrome.storage?.local?.set({ latestSteamProof: result });
+        } catch (e) {
+          console.warn('Failed to store latestSteamProof:', e);
+        }
       } catch (err) {
         setProofStatus(`Error: ${err?.message || String(err)}`, true);
         showProofOutput({ error: err?.message || String(err) });

@@ -153,19 +153,71 @@ async function main() {
   // Create Steam Games from the Discord data
   const gamesData = [
     // Standard games
-    { appId: '413150', name: 'Stardew Valley', storeUrl: 'https://store.steampowered.com/app/413150/Stardew_Valley/' },
-    { appId: '1290000', name: 'PowerWash Simulator', storeUrl: 'https://store.steampowered.com/app/1290000/PowerWash_Simulator/' },
-    { appId: '1868140', name: 'DAVE THE DIVER', storeUrl: 'https://store.steampowered.com/app/1868140/DAVE_THE_DIVER/' },
-    { appId: '1245620', name: 'ELDEN RING', storeUrl: 'https://store.steampowered.com/app/1245620/ELDEN_RING/' },
-    { appId: '268910', name: 'Cuphead', storeUrl: 'https://store.steampowered.com/app/268910/Cuphead/' },
+    {
+      appId: "413150",
+      name: "Stardew Valley",
+      storeUrl: "https://store.steampowered.com/app/413150/Stardew_Valley/",
+    },
+    {
+      appId: "1290000",
+      name: "PowerWash Simulator",
+      storeUrl:
+        "https://store.steampowered.com/app/1290000/PowerWash_Simulator/",
+    },
+    {
+      appId: "1868140",
+      name: "DAVE THE DIVER",
+      storeUrl: "https://store.steampowered.com/app/1868140/DAVE_THE_DIVER/",
+    },
+    {
+      appId: "1245620",
+      name: "ELDEN RING",
+      storeUrl: "https://store.steampowered.com/app/1245620/ELDEN_RING/",
+    },
+    {
+      appId: "268910",
+      name: "Cuphead",
+      storeUrl: "https://store.steampowered.com/app/268910/Cuphead/",
+    },
+    // eFootball (requested)
+    {
+      appId: "1665460",
+      name: "eFootball™",
+      storeUrl: "https://store.steampowered.com/app/1665460/eFootball/",
+    },
     // VR games
-    { appId: '620980', name: 'Beat Saber', storeUrl: 'https://store.steampowered.com/app/620980/Beat_Saber/' },
-    { appId: '1575520', name: 'Fruit Ninja VR 2', storeUrl: 'https://store.steampowered.com/app/1575520/Fruit_Ninja_VR_2/' },
-    { appId: '617830', name: 'SUPERHOT VR', storeUrl: 'https://store.steampowered.com/app/617830/SUPERHOT_VR/' },
-    { appId: '690620', name: 'Downward Spiral: Horus Station', storeUrl: 'https://store.steampowered.com/app/690620/Downward_Spiral_Horus_Station/' },
-    { appId: '448280', name: 'Job Simulator', storeUrl: 'https://store.steampowered.com/app/448280/Job_Simulator/' },
-    { appId: '450390', name: 'The Lab', storeUrl: 'https://store.steampowered.com/app/450390/The_Lab/' },
-  ]
+    {
+      appId: "620980",
+      name: "Beat Saber",
+      storeUrl: "https://store.steampowered.com/app/620980/Beat_Saber/",
+    },
+    {
+      appId: "1575520",
+      name: "Fruit Ninja VR 2",
+      storeUrl: "https://store.steampowered.com/app/1575520/Fruit_Ninja_VR_2/",
+    },
+    {
+      appId: "617830",
+      name: "SUPERHOT VR",
+      storeUrl: "https://store.steampowered.com/app/617830/SUPERHOT_VR/",
+    },
+    {
+      appId: "690620",
+      name: "Downward Spiral: Horus Station",
+      storeUrl:
+        "https://store.steampowered.com/app/690620/Downward_Spiral_Horus_Station/",
+    },
+    {
+      appId: "448280",
+      name: "Job Simulator",
+      storeUrl: "https://store.steampowered.com/app/448280/Job_Simulator/",
+    },
+    {
+      appId: "450390",
+      name: "The Lab",
+      storeUrl: "https://store.steampowered.com/app/450390/The_Lab/",
+    },
+  ];
 
   const games = await Promise.all(
     gamesData.map(async (game) => {
@@ -176,9 +228,10 @@ async function main() {
           metadata: {
             appId: game.appId,
             storeUrl: game.storeUrl,
+            ...(game as any).metadata,
           },
         },
-      })
+      });
 
       await prisma.itemSteamGame.create({
         data: {
@@ -186,8 +239,9 @@ async function main() {
           itemId: item.id,
           gameName: game.name,
           storeUrl: game.storeUrl,
+          additionalData: (game as any).additionalData,
         },
-      })
+      });
 
       return item
     })
@@ -352,4 +406,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect()
   })
-

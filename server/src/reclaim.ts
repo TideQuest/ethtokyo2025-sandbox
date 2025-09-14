@@ -193,7 +193,26 @@ export async function createSteamProof(params: {
   const appSecret = process.env.RECLAIM_APP_SECRET
 
   if (!appId || !appSecret) {
-    throw new Error('Missing RECLAIM_APP_ID or RECLAIM_APP_SECRET environment variables')
+    console.warn('[Steam] RECLAIM_APP_ID/SECRET missing. Using compatibility fallback for real-mode proof.')
+    const sessionId = 'steam-session-' + Math.random().toString(36).slice(2)
+    return {
+      success: true,
+      mode: 'real',
+      proof: {
+        sessionId,
+        steamId: params.steamId,
+        targetAppId: params.targetAppId,
+        timestamp: Date.now(),
+        verified: false,
+        note: 'Real mode (package compatibility workaround: missing credentials)',
+        userDataUrl: params.userDataUrl,
+        cookieStr: params.cookieStr,
+      },
+      steamId: params.steamId,
+      targetAppId: params.targetAppId,
+      timestamp: Date.now(),
+      warning: 'RECLAIM credentials missing; generated non-ZK proof with server-verify fallback.'
+    }
   }
 
   try {
@@ -255,7 +274,7 @@ export async function createSteamProof(params: {
             steamId: params.steamId,
             targetAppId: params.targetAppId,
             timestamp: Date.now(),
-            verified: true,
+            verified: false,
             // Indicate this is a real mode response but with package limitations
             note: 'Real mode (package compatibility workaround)',
             userDataUrl: params.userDataUrl,
@@ -299,7 +318,46 @@ export async function verifySteamProof(proof: any) {
       verified: true,
       reason: 'mock-mode',
       steamId: proof.steamId,
-      targetAppId: proof.targetAppId
+      targetAppId: proof.targetAppId,
+    }
+  }
+
+  // If proof was generated via compatibility fallback, verify by fetching Steam data directly
+  if ((proof?.note as string)?.includes('compatibility workaround') && proof?.userDataUrl && proof?.cookieStr) {
+    try {
+      const resp = await fetch(proof.userDataUrl as string, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json, text/plain, */*',
+          'Cookie': proof.cookieStr as string,
+        },
+      })
+      const text = await resp.text()
+
+      // Build regex to match Steam owned apps list, optionally ensure targetAppId exists
+      let regexSrc = '"rgOwnedApps"\s*:\\s*\\[[^\\]]*'
+      if (proof.targetAppId) {
+        const escaped = String(proof.targetAppId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        regexSrc += `${escaped}`
+      }
+      regexSrc += '[^\\]]*\\]'
+      const re = new RegExp(regexSrc)
+      const ok = re.test(text)
+
+      return {
+        verified: ok,
+        reason: ok ? 'verified-fallback' : 'not-owned',
+        steamId: proof.steamId,
+        targetAppId: proof.targetAppId,
+      }
+    } catch (error: any) {
+      console.error('Fallback verification failed:', error)
+      return {
+        verified: false,
+        reason: `fallback-error: ${error?.message || 'unknown'}`,
+        steamId: proof.steamId,
+        targetAppId: proof.targetAppId,
+      }
     }
   }
 
@@ -312,7 +370,7 @@ export async function verifySteamProof(proof: any) {
       verified: !!isValid,
       reason: isValid ? 'verified' : 'invalid',
       steamId: proof.steamId,
-      targetAppId: proof.targetAppId
+      targetAppId: proof.targetAppId,
     }
   } catch (error: any) {
     console.error('Failed to verify Steam proof:', error)
@@ -320,8 +378,7 @@ export async function verifySteamProof(proof: any) {
       verified: false,
       reason: `verification-error: ${error.message}`,
       steamId: proof.steamId,
-      targetAppId: proof.targetAppId
+      targetAppId: proof.targetAppId,
     }
   }
 }
-

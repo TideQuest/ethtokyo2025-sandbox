@@ -98,7 +98,6 @@ export async function getCuratorRecommendation(
     );
 
     const processingTime = (Date.now() - startTime) / 1000;
-
     return {
       curator: curatorId,
       inputGame: game,

@@ -5,8 +5,8 @@ import { nl2sqlRouter } from './routes/nl2sql.js'
 import { zkpRouter } from './routes/zkp.js'
 import itemsRouter from './routes/items.js'
 import recommendationsRouter from './routes/recommendations.js'
-import categoriesRouter from './routes/categories.js'
 import gamesRouter from './routes/games.js'
+import categoriesRouter from './routes/categories.js'
 import curatorsRouter from './routes/curators.js'
 
 const app = express()
@@ -28,6 +28,7 @@ app.use('/api/zkp', zkpRouter)
 app.use('/api/items', itemsRouter)
 app.use('/api/recommendations', recommendationsRouter)
 app.use('/api/categories', categoriesRouter)
+app.use('/api/curators', curatorsRouter)
 app.use('/api/games', gamesRouter)
 app.use('/api/curators', curatorsRouter)
 
@@ -35,4 +36,3 @@ const port = Number(process.env.PORT || 3000)
 app.listen(port, () => {
   console.log(`[server] listening on http://localhost:${port}`)
 })
-

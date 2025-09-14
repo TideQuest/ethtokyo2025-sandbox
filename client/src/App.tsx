@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useAccount } from 'wagmi'
 import { WalletProvider, WalletConnectControls } from './wallet'
 import OriginalApp from './OriginalApp'
 
@@ -321,26 +322,132 @@ function SearchPage({
 function OfferPage({ prefilledSourceGameId }: { prefilledSourceGameId?: string }) {
   const [sourceGameId, setSourceGameId] = useState(prefilledSourceGameId || '')
   const [targetGameId, setTargetGameId] = useState('')
+  const [items, setItems] = useState<Array<{ id: string; title: string; steamAppId?: string }>>([])
+  const [itemsLoading, setItemsLoading] = useState(false)
+  const [itemsError, setItemsError] = useState<string | null>(null)
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
+  const [steamProof, setSteamProof] = useState<any | null>(null)
+  const { address } = useAccount()
+
+  // Load Items from backend to ensure IDs exist
+  useEffect(() => {
+    const loadItems = async () => {
+      setItemsLoading(true)
+      setItemsError(null)
+      try {
+        const res = await fetch('/api/items')
+        const text = await res.text()
+        const data = text ? JSON.parse(text) : []
+        if (!res.ok) throw new Error((data && data.error) || 'Failed to load items')
+
+        const normalized = (Array.isArray(data) ? data : []).map((it: any) => ({
+          id: String(it.id),
+          title: typeof it.title === 'string' ? it.title : (it.name ?? `Item ${it.id}`),
+          steamAppId: it?.metadata?.appId || it?.steamGameDetails?.[0]?.steamAppId
+        }))
+
+        setItems(normalized)
+        // Initialize selections if empty
+        if (!prefilledSourceGameId && !sourceGameId) {
+          const first = (normalized[0]?.steamAppId || normalized[0]?.id)?.toString() || ''
+          setSourceGameId(first)
+        }
+        if (!targetGameId) {
+          const second = (normalized[1]?.steamAppId || normalized[1]?.id || normalized[0]?.steamAppId || normalized[0]?.id)?.toString() || ''
+          setTargetGameId(second)
+        }
+      } catch (e: any) {
+        console.error('Failed to load items', e)
+        setItemsError(e?.message || 'Failed to load items')
+      } finally {
+        setItemsLoading(false)
+      }
+    }
+    loadItems()
+  }, [prefilledSourceGameId])
+
+  // Listen for proof from the Chrome extension content script
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      // Only accept messages from same window
+      if (e.source !== window) return
+      const msg = e.data
+      if (msg && msg.type === 'STEAM_PROOF_FROM_EXTENSION') {
+        setSteamProof(msg.data)
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
 
   const submitOffer = async () => {
     if (!sourceGameId.trim() || !targetGameId.trim() || !description.trim()) return
 
     setLoading(true)
     try {
-      // TODO: API呼び出しを実装
-      console.log('Offer submitted:', { sourceGameId, targetGameId, description })
+      // If we have a Steam proof from the extension, verify it before submitting the offer
+      if (steamProof) {
+        const proofObj = steamProof.proof || steamProof
+        const steamId = steamProof.steamId || proofObj.steamId
+        const targetAppId = sourceGameId // prove ownership for the selected target game (sourceGameId variable)
 
-      setTimeout(() => {
-        alert('Offer submitted successfully!')
-        setSourceGameId('')
-        setTargetGameId('')
-        setDescription('')
-        setLoading(false)
-      }, 1000)
+        const verifyRes = await fetch('/api/zkp/steam/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            proof: proofObj,
+            steamId,
+            targetAppId,
+            // Also send the recommended game's app id; server will accept if either matches the proof
+            recommendedAppId: targetGameId,
+            // If connected, bind proof to this account so purchase history matches the recommender
+            walletAddress: address || undefined,
+          }),
+        })
+        const verifyText = await verifyRes.text()
+        const verifyData = verifyText ? JSON.parse(verifyText) : null
+        if (!verifyRes.ok || !verifyData?.success) {
+          const msg = (verifyData && (verifyData.error || verifyData.reason)) || verifyText || 'Failed to verify Steam proof'
+          throw new Error(msg)
+        }
+        if (!verifyData.verified) {
+          throw new Error(`Steam proof not verified: ${verifyData.reason || 'unknown reason'}`)
+        }
+      }
+
+      // Prefer Steam appId when available, backend route expects steam ids
+      const src = sourceGameId
+      const dst = targetGameId
+      const walletAddress = address || '0x1234567890123456789012345678901234567890' // fallback to seeded account
+
+      // If values look like pure numbers (no steam appId), fallback to /api/recommendations with numeric IDs
+      const endpoint = '/api/games/recommendations'
+
+      const body = { sourceGameId: src, targetGameId: dst, description, walletAddress }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const text = await res.text()
+      const data = text ? JSON.parse(text) : null
+      if (!res.ok) {
+        const msg = (data && data.error) || text || 'Failed to submit offer'
+        throw new Error(msg)
+      }
+
+      alert('Offer submitted successfully!')
+      // Keep the selected IDs, just clear the text
+      setDescription('')
+      // Clear proof only after successful submit
+      // setSteamProof(null)
+      setLoading(false)
     } catch (error) {
       console.error('Error submitting offer:', error)
+      alert(error instanceof Error ? error.message : 'Failed to submit offer')
       setLoading(false)
     }
   }
@@ -353,44 +460,59 @@ function OfferPage({ prefilledSourceGameId }: { prefilledSourceGameId?: string }
       </p>
 
       <div style={{ marginBottom: 24 }}>
+        {itemsError && (
+          <div style={{ color: '#c00', marginBottom: 12 }}>Failed to load games: {itemsError}</div>
+        )}
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
             Target Game ID
           </label>
-          <input
-            type="text"
+          <select
             value={sourceGameId}
             onChange={(e) => setSourceGameId(e.target.value)}
-            placeholder="Game ID that people are asking recommendations for"
+            disabled={itemsLoading || items.length === 0}
             style={{
               width: '100%',
               padding: 12,
               fontSize: 16,
               border: '2px solid #ddd',
               borderRadius: 8,
-              outline: 'none'
+              outline: 'none',
+              background: '#fff'
             }}
-          />
+          >
+            {itemsLoading && <option>Loading...</option>}
+            {!itemsLoading && items.length === 0 && <option>No games found</option>}
+            {!itemsLoading && items.map((it) => (
+              <option key={it.id} value={(it.steamAppId || it.id).toString()}>{it.title} ({it.steamAppId ? `appId:${it.steamAppId}` : `#${it.id}`})</option>
+            ))}
+          </select>
         </div>
 
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
             Recommended Game ID
           </label>
-          <input
-            type="text"
+          <select
             value={targetGameId}
             onChange={(e) => setTargetGameId(e.target.value)}
-            placeholder="Game ID you want to recommend"
+            disabled={itemsLoading || items.length === 0}
             style={{
               width: '100%',
               padding: 12,
               fontSize: 16,
               border: '2px solid #ddd',
               borderRadius: 8,
-              outline: 'none'
+              outline: 'none',
+              background: '#fff'
             }}
-          />
+          >
+            {itemsLoading && <option>Loading...</option>}
+            {!itemsLoading && items.length === 0 && <option>No games found</option>}
+            {!itemsLoading && items.map((it) => (
+              <option key={it.id} value={(it.steamAppId || it.id).toString()}>{it.title} ({it.steamAppId ? `appId:${it.steamAppId}` : `#${it.id}`})</option>
+            ))}
+          </select>
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -434,6 +556,12 @@ function OfferPage({ prefilledSourceGameId }: { prefilledSourceGameId?: string }
           >
             Verify with Steam
           </button>
+
+          {steamProof && (
+            <span style={{ fontSize: 12, color: '#2e7d32' }}>
+              Proof attached from extension
+            </span>
+          )}
 
           <button
             onClick={submitOffer}
@@ -501,67 +629,25 @@ export default function App() {
 
     setLoading(true)
     try {
-      // ターゲットゲーム情報を取得
-      const targetGameInfo = getTargetGameInfo(gameId.trim())
-      setTargetGame(targetGameInfo)
+      // ターゲットゲーム情報を取得（API）
+      try {
+        const gameRes = await fetch(`/api/games/${encodeURIComponent(gameId.trim())}`)
+        const gameText = await gameRes.text()
+        const gameData = gameText ? JSON.parse(gameText) : null
+        if (gameRes.ok && gameData) setTargetGame(gameData)
+        else setTargetGame(null)
+      } catch {
+        setTargetGame(null)
+      }
 
-      // TODO: API呼び出しを実装
-      // 現在はモックデータを使用
-      const mockRecommendations: GameRecommendation[] = [
-        {
-          id: '1',
-          name: 'Counter-Strike 2',
-          description: 'Similar tactical FPS gameplay',
-          accountType: 'ai_agent',
-          accountName: 'FPS Recommender AI',
-          likes: 47,
-          isLiked: false
-        },
-        {
-          id: '2',
-          name: 'Valorant',
-          description: 'Same competitive shooter genre',
-          accountType: 'user',
-          accountName: 'ProGamer_2024',
-          purchaseHistory: {
-            hasSourceGame: true,
-            hasRecommendedGame: false
-          },
-          likes: 23,
-          isLiked: true
-        },
-        {
-          id: '3',
-          name: 'Apex Legends',
-          description: 'Popular among similar players',
-          accountType: 'user',
-          accountName: 'SteamUser123',
-          purchaseHistory: {
-            hasSourceGame: false,
-            hasRecommendedGame: true
-          },
-          likes: 15,
-          isLiked: false
-        },
-        {
-          id: '4',
-          name: 'Rainbow Six Siege',
-          description: 'Strategic team-based shooter',
-          accountType: 'user',
-          accountName: 'TacticalPlayer',
-          purchaseHistory: {
-            hasSourceGame: true,
-            hasRecommendedGame: true
-          },
-          likes: 89,
-          isLiked: false
-        }
-      ]
+      // レコメンデーション取得（API）
+      const res = await fetch(`/api/games/${encodeURIComponent(gameId.trim())}/recommendations`)
+      const text = await res.text()
+      const data = text ? JSON.parse(text) : []
+      if (!res.ok) throw new Error((data && data.error) || 'Failed to fetch recommendations')
 
-      setTimeout(() => {
-        setRecommendations(mockRecommendations)
-        setLoading(false)
-      }, 1000)
+      setRecommendations(data)
+      setLoading(false)
     } catch (error) {
       console.error('Error fetching recommendations:', error)
       setLoading(false)

@@ -116,11 +116,14 @@ class SteamService {
   }
 
   async enrichGameWithSteamInfo(gameName: string): Promise<{
+    name: string;
     steamAppId: number | null;
     steamUrl: string | null;
   }> {
     const steamInfo = await this.searchGameAppId(gameName);
+
     return {
+      name: gameName,
       steamAppId: steamInfo.appId,
       steamUrl: steamInfo.url
     };
@@ -128,3 +131,4 @@ class SteamService {
 }
 
 export const steamService = SteamService.getInstance();
+export type { SteamGameInfo };

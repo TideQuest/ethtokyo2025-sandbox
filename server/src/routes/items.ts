@@ -1,9 +1,13 @@
-import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Router } from 'express'
+import { PrismaClient } from '@prisma/client'
 import { z } from 'zod';
 
-const router = Router();
-const prisma = new PrismaClient();
+// NOTE: Updated to match current Prisma schema (Item IDs are strings; games via ItemSteamGame)
+
+const router = Router()
+const prisma = new PrismaClient()
+
+// GET /api/items - List items (games) with Steam details
 
 const CreateItemSchema = z.object({
   name: z.string().min(1).max(255),
@@ -27,7 +31,6 @@ router.get('/', async (req, res) => {
       : {};
 
     const items = await prisma.item.findMany({
-      where,
       include: {
         itemType: true,
         steamGameDetails: true,
@@ -37,17 +40,15 @@ router.get('/', async (req, res) => {
           }
         }
       },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+      orderBy: { createdAt: 'desc' },
+    })
 
-    res.json(items);
+    res.json(items)
   } catch (error) {
-    console.error('Error fetching items:', error);
-    res.status(500).json({ error: 'Failed to fetch items' });
+    console.error('Error fetching items:', error)
+    res.status(500).json({ error: 'Failed to fetch items' })
   }
-});
+})
 
 // GET /api/items/:id - Get single item
 router.get('/:id', async (req, res) => {
