@@ -1,6 +1,6 @@
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOllama } from '@langchain/ollama';
-import { getCuratorPrompt } from '../config/curators.js';
+import { getCuratorPrompt, getFallbackRecommendations } from '../config/curators.js';
 import { steamService } from './steamService.js';
 
 // 環境変数でLLMプロバイダーを選択
@@ -16,7 +16,7 @@ const getLLM = () => {
   } else {
     return new ChatOllama({
       baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
-      model: process.env.OLLAMA_MODEL || 'llama3',
+      model: process.env.OLLAMA_MODEL || 'llama3.2:1b',
       temperature: 0.7,
       numCtx: 2048
     });
@@ -38,17 +38,17 @@ export async function getCuratorRecommendation(
   game: string
 ): Promise<{ curator: string; inputGame: string; recommendations: EnrichedRecommendation[]; processingTime: number }> {
   const startTime = Date.now();
-  
+
   try {
     const prompt = getCuratorPrompt(curatorId, game);
-    
+
     const response = await llm.invoke(prompt);
-    const content = typeof response.content === 'string' 
-      ? response.content 
+    const content = typeof response.content === 'string'
+      ? response.content
       : String(response.content);
-    
+
     console.log('LLM Response:', content.substring(0, 200) + '...');
-    
+
     // JSONパースを試行
     let recommendations;
     try {
@@ -74,12 +74,12 @@ export async function getCuratorRecommendation(
 
         recommendations = validRecommendations.length > 0 ? validRecommendations : getFallbackRecommendations(curatorId, game);
       } else {
-        console.warn('推薦配列が無効、フォールバック使用');
+        console.warn('Invalid recommendations array, using fallback');
         recommendations = getFallbackRecommendations(curatorId, game);
       }
     } catch (parseError) {
-      console.warn('JSON解析に失敗、フォールバック使用:', parseError);
-      console.warn('パース対象コンテンツ:', content.substring(0, 500));
+      console.warn('Failed to parse JSON, using fallback:', parseError);
+      console.warn('Content to parse:', content.substring(0, 500));
       recommendations = getFallbackRecommendations(curatorId, game);
     }
 
@@ -98,7 +98,6 @@ export async function getCuratorRecommendation(
     );
 
     const processingTime = (Date.now() - startTime) / 1000;
-    
     return {
       curator: curatorId,
       inputGame: game,
@@ -106,7 +105,7 @@ export async function getCuratorRecommendation(
       processingTime
     };
   } catch (error) {
-    console.error('キュレーター推薦エラー:', error);
+    console.error('Curator recommendation error:', error);
     const processingTime = (Date.now() - startTime) / 1000;
 
     // Enrich fallback recommendations with Steam information
@@ -131,62 +130,4 @@ export async function getCuratorRecommendation(
       processingTime
     };
   }
-}
-
-function getFallbackRecommendations(curatorId: string, inputGame: string): any[] {
-  const fallbacks = {
-    vita: [
-      {
-        name: "Outer Wilds",
-        reason: `${inputGame}の探索要素を宇宙規模の謎解きと時間ループで表現した没入型アドベンチャー`,
-        category: "immersive"
-      },
-      {
-        name: "Subnautica",
-        reason: `${inputGame}のような世界観を深海の恐怖と美しさで体験できる究極の没入型サバイバル`,
-        category: "immersive"
-      },
-      {
-        name: "The Stanley Parable: Ultra Deluxe",
-        reason: `${inputGame}の物語性をメタ的な視点と選択の意味を問う革新的な体験で表現`,
-        category: "immersive"
-      }
-    ],
-    indie: [
-      {
-        name: "Gris",
-        reason: `${inputGame}と同じく深い感情的な物語を美しいアートスタイルで表現した傑作`,
-        category: "indie"
-      },
-      {
-        name: "Outer Wilds",
-        reason: `${inputGame}の探求心を宇宙規模の時間ループという独創的な仕組みで実現`,
-        category: "indie"
-      },
-      {
-        name: "The Stanley Parable",
-        reason: `${inputGame}のようにプレイヤーの選択と物語の関係を革新的に表現したメタゲーム`,
-        category: "indie"
-      }
-    ],
-    core: [
-      {
-        name: "Sekiro: Shadows Die Twice",
-        reason: `${inputGame}の技術的挑戦を完璧なタイミングと反射神経で極限まで高めたアクションゲーム`,
-        category: "hardcore"
-      },
-      {
-        name: "The Binding of Isaac",
-        reason: `${inputGame}の戦略性をローグライクの運と技術の両方が必要な高難易度システムで実現`,
-        category: "hardcore"
-      },
-      {
-        name: "Spelunky 2",
-        reason: `${inputGame}の精密な操作要求を毎回異なる状況判断が求められる究極の2Dプラットフォーマーで体現`,
-        category: "hardcore"
-      }
-    ]
-  };
-
-  return fallbacks[curatorId as keyof typeof fallbacks] || fallbacks.vita;
 }

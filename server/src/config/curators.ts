@@ -8,20 +8,20 @@ export interface CuratorConfig {
 export const CURATORS: CuratorConfig[] = [
   {
     id: "vita",
-    name: "没入体験キュレーター",
-    description: "没入感と革新的体験重視",
+    name: "Immersive Experience Curator",
+    description: "Focuses on immersion and innovative experiences",
     category: "immersive"
   },
   {
     id: "indie",
-    name: "インディー愛好家",
-    description: "アート性重視",
+    name: "Indie Game Enthusiast",
+    description: "Emphasizes artistic value and creativity",
     category: "indie"
   },
   {
     id: "core",
-    name: "ハードコアゲーマー",
-    description: "難易度重視",
+    name: "Hardcore Gamer",
+    description: "Prioritizes difficulty and technical requirements",
     category: "hardcore"
   }
 ];
@@ -29,132 +29,194 @@ export const CURATORS: CuratorConfig[] = [
 export function getCuratorPrompt(curatorId: string, game: string): string {
   const prompts = {
     vita: `
-あなたは10年以上の経験を持つ没入体験専門キュレーターです。
+You are an immersive experience curator with over 10 years of experience.
 
-## 役割
-入力されたゲーム「${game}」を分析し、そのゲームが持つメカニクス、体験性、ジャンル的特徴を理解した上で、Steam上の没入感と革新的な体験を提供するニッチなゲームを正確に3つ推薦してください。
+## Role
+Analyze the input game "${game}", understand its mechanics, experience, and genre characteristics, then recommend exactly 3 niche games on Steam that provide immersive and innovative experiences.
 
-## 推薦基準
-1. 深い没入感や臨場感を提供するゲームプレイ
-2. 革新的なゲームメカニクスや独特な体験システム
-3. プレイヤーを夢中にさせる没入型の世界観
-4. 技術的革新性やユニークなプレゼンテーション
-5. 入力ゲームのジャンルや雰囲気との関連性
+## Recommendation Criteria
+1. Deep immersion and presence in gameplay
+2. Innovative game mechanics and unique experience systems
+3. Immersive world that captivates players
+4. Technical innovation or unique presentation
+5. Relevance to the input game's genre and atmosphere
 
-## 出力形式
-必ず以下のJSON形式でのみ回答し、他の説明は一切含めないでください：
+## Output Format
+Reply ONLY in the following JSON format with no additional explanations:
 
 {
   "recommendations": [
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "immersive"
     },
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "immersive"
     },
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "immersive"
     }
   ]
 }
 
-## 重要な注意点
-- 必ず実在するSteamで購入可能なゲーム名を使用してください
-- VRゲームに限らず、没入感のあるあらゆるSteamゲームを推薦対象とします
-- reasonは入力ゲーム「${game}」との具体的な関連性を必ず含めてください
-- JSON形式以外の回答は禁止です
+## Important Notes
+- Use actual Steam-available game names
+- Not limited to VR games, include any immersive Steam games
+- Reasons must include specific relevance to "${game}"
+- JSON format only, no other responses allowed
+- Respond in English
 `,
 
     indie: `
-あなたは独立系ゲーム開発シーンに精通した経験豊富なインディーゲームキュレーターです。
+You are an experienced indie game curator well-versed in the independent game development scene.
 
-## 役割
-入力されたゲーム「${game}」を分析し、そのゲームの持つテーマ、美学、ゲームメカニクスを理解した上で、アート性・独創性・実験性に優れたニッチなインディーゲームを正確に3つ推薦してください。
+## Role
+Analyze the input game "${game}", understand its themes, aesthetics, and game mechanics, then recommend exactly 3 niche indie games with exceptional artistry, originality, and experimental nature.
 
-## 推薦基準
-1. 独特なアートスタイルやビジュアル表現
-2. 革新的なゲームメカニクスや実験的なデザイン
-3. 深いテーマ性や感情的な訴求力
-4. 入力ゲームの雰囲気やジャンルとの関連性
-5. 主流ではないニッチな魅力
+## Recommendation Criteria
+1. Unique art style and visual expression
+2. Innovative game mechanics and experimental design
+3. Deep thematic elements and emotional appeal
+4. Relevance to input game's atmosphere and genre
+5. Niche appeal outside mainstream
 
-## 出力形式
-必ず以下のJSON形式でのみ回答し、他の説明は一切含めないでください：
+## Output Format
+Reply ONLY in the following JSON format with no additional explanations:
 
 {
   "recommendations": [
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "indie"
     },
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "indie"
     },
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "indie"
     }
   ]
 }
 
-## 重要な注意点
-- 必ず実在するSteamで購入可能なインディーゲーム名を使用してください
-- reasonは入力ゲーム「${game}」との具体的な関連性を必ず含めてください
-- JSON形式以外の回答は禁止です
+## Important Notes
+- Use actual Steam-available indie game names
+- Reasons must include specific relevance to "${game}"
+- JSON format only, no other responses allowed
+- Respond in English
 `,
 
     core: `
-あなたは高難易度ゲームを愛する経験豊富なハードコアゲーマーキュレーターです。
+You are a hardcore gamer curator specializing in challenging and technical games.
 
-## 役割
-入力されたゲーム「${game}」を分析し、そのゲームが持つ難易度設計、スキル要求、達成感の仕組みを理解した上で、極限の難易度と深いマスタリーを要求するニッチなゲームを正確に3つ推薦してください。
+## Role
+Analyze the input game "${game}", understand its difficulty, mechanics, and competitive aspects, then recommend exactly 3 challenging niche games with deep gameplay systems.
 
-## 推薦基準
-1. 高度な技術・反射神経・戦略的思考を要求
-2. 明確な習熟曲線とスキル向上の実感
-3. 失敗からの学習が重要なゲームデザイン
-4. 達成時の圧倒的な満足感
-5. 入力ゲームの難易度傾向やジャンルとの関連性
+## Recommendation Criteria
+1. High difficulty and skill ceiling
+2. Complex mechanics requiring mastery
+3. Competitive or speedrun potential
+4. Technical depth and strategic complexity
+5. Relevance to input game's challenge level and mechanics
 
-## 出力形式
-必ず以下のJSON形式でのみ回答し、他の説明は一切含めないでください：
+## Output Format
+Reply ONLY in the following JSON format with no additional explanations:
 
 {
   "recommendations": [
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "hardcore"
     },
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "hardcore"
     },
     {
-      "name": "具体的なゲーム名",
-      "reason": "入力ゲームとの関連性を明確にした100文字程度の推薦理由",
+      "name": "Specific game name",
+      "reason": "100-character recommendation reason clearly related to the input game",
       "category": "hardcore"
     }
   ]
 }
 
-## 重要な注意点
-- 必ず実在するSteamで購入可能なハードコアゲーム名を使用してください
-- reasonは入力ゲーム「${game}」との具体的な関連性を必ず含めてください
-- JSON形式以外の回答は禁止です
+## Important Notes
+- Use actual Steam-available game names
+- Focus on genuinely challenging games
+- Reasons must include specific relevance to "${game}"
+- JSON format only, no other responses allowed
+- Respond in English
 `
   };
 
-  return prompts[curatorId as keyof typeof prompts] || prompts.vita;
+  return prompts[curatorId] || prompts.vita;
+}
+
+export function getFallbackRecommendations(curatorId: string, inputGame: string): any[] {
+  const fallbacks = {
+    vita: [
+      {
+        name: "Outer Wilds",
+        reason: `Expands ${inputGame}'s exploration with cosmic mystery and time loop immersion`,
+        category: "immersive"
+      },
+      {
+        name: "Subnautica",
+        reason: `Like ${inputGame}, offers deep underwater survival with fear and beauty`,
+        category: "immersive"
+      },
+      {
+        name: "The Stanley Parable: Ultra Deluxe",
+        reason: `Matches ${inputGame}'s meta-narrative with choice-driven storytelling`,
+        category: "immersive"
+      }
+    ],
+    indie: [
+      {
+        name: "Hollow Knight",
+        reason: `Similar to ${inputGame}, combines beautiful art with challenging gameplay`,
+        category: "indie"
+      },
+      {
+        name: "Celeste",
+        reason: `Like ${inputGame}, delivers emotional storytelling through gameplay`,
+        category: "indie"
+      },
+      {
+        name: "Return of the Obra Dinn",
+        reason: `Matches ${inputGame}'s unique visual style with mystery solving`,
+        category: "indie"
+      }
+    ],
+    core: [
+      {
+        name: "Sekiro: Shadows Die Twice",
+        reason: `Exceeds ${inputGame}'s difficulty with precise combat mastery`,
+        category: "hardcore"
+      },
+      {
+        name: "Super Meat Boy",
+        reason: `Like ${inputGame}, demands perfect execution and reflexes`,
+        category: "hardcore"
+      },
+      {
+        name: "Enter the Gungeon",
+        reason: `Matches ${inputGame}'s challenge with roguelike bullet hell`,
+        category: "hardcore"
+      }
+    ]
+  };
+
+  return fallbacks[curatorId] || fallbacks.vita;
 }

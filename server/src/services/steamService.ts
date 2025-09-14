@@ -50,76 +50,69 @@ class SteamService {
     }
 
     try {
-      console.log(`Searching Steam for game: ${gameName}`);
-
-      // Use Steam Web API to search for games
+      // Fetch Steam app list
       const response = await fetch('https://api.steampowered.com/ISteamApps/GetAppList/v2/');
-
-      if (!response.ok) {
-        throw new Error(`Steam API request failed: ${response.status}`);
-      }
-
       const data: SteamApiResponse = await response.json();
 
-      // Search for the game in the app list
-      const normalizedSearchName = this.normalizeGameName(gameName);
-      const matchedApp = data.applist.apps.find(app =>
-        this.normalizeGameName(app.name) === normalizedSearchName
+      if (!data?.applist?.apps) {
+        return this.cacheAndReturn(normalizedName, {
+          appId: null,
+          url: null,
+          found: false
+        });
+      }
+
+      // Find exact match first
+      let matchedGame = data.applist.apps.find(
+        app => this.normalizeGameName(app.name) === normalizedName
       );
 
-      let result: SteamGameInfo;
+      // If no exact match, try partial match
+      if (!matchedGame) {
+        matchedGame = data.applist.apps.find(app => {
+          const appNameNormalized = this.normalizeGameName(app.name);
+          return appNameNormalized.includes(normalizedName) ||
+                 normalizedName.includes(appNameNormalized);
+        });
+      }
 
-      if (matchedApp) {
-        result = {
-          appId: matchedApp.appid,
-          url: `https://store.steampowered.com/app/${matchedApp.appid}/`,
+      // If still no match, try fuzzy match
+      if (!matchedGame) {
+        const nameWords = normalizedName.split(' ');
+        matchedGame = data.applist.apps.find(app => {
+          const appNameNormalized = this.normalizeGameName(app.name);
+          return nameWords.every(word => appNameNormalized.includes(word));
+        });
+      }
+
+      if (matchedGame) {
+        const steamInfo: SteamGameInfo = {
+          appId: matchedGame.appid,
+          url: `https://store.steampowered.com/app/${matchedGame.appid}`,
           found: true
         };
-        console.log(`Found Steam game: ${gameName} -> AppID: ${matchedApp.appid}`);
-      } else {
-        // Try partial matching as fallback
-        const partialMatch = data.applist.apps.find(app =>
-          this.normalizeGameName(app.name).includes(normalizedSearchName) ||
-          normalizedSearchName.includes(this.normalizeGameName(app.name))
-        );
-
-        if (partialMatch) {
-          result = {
-            appId: partialMatch.appid,
-            url: `https://store.steampowered.com/app/${partialMatch.appid}/`,
-            found: true
-          };
-          console.log(`Found partial Steam match: ${gameName} -> ${partialMatch.name} (AppID: ${partialMatch.appid})`);
-        } else {
-          result = {
-            appId: null,
-            url: null,
-            found: false
-          };
-          console.log(`No Steam match found for: ${gameName}`);
-        }
+        return this.cacheAndReturn(normalizedName, steamInfo);
       }
 
-      // Cache the result
-      this.gameCache.set(normalizedName, result);
-      this.cacheExpiry.set(normalizedName, Date.now() + this.CACHE_DURATION);
-
-      return result;
+      return this.cacheAndReturn(normalizedName, {
+        appId: null,
+        url: null,
+        found: false
+      });
     } catch (error) {
-      console.error(`Error searching Steam for ${gameName}:`, error);
-
-      // Return cached result if available, otherwise return not found
-      const cachedResult = this.gameCache.get(normalizedName);
-      if (cachedResult) {
-        return cachedResult;
-      }
-
+      console.error('Error searching Steam app:', error);
       return {
         appId: null,
         url: null,
         found: false
       };
     }
+  }
+
+  private cacheAndReturn(gameName: string, info: SteamGameInfo): SteamGameInfo {
+    this.gameCache.set(gameName, info);
+    this.cacheExpiry.set(gameName, Date.now() + this.CACHE_DURATION);
+    return info;
   }
 
   async enrichGameWithSteamInfo(gameName: string): Promise<{

@@ -30,6 +30,7 @@ app.use('/api/recommendations', recommendationsRouter)
 app.use('/api/categories', categoriesRouter)
 app.use('/api/curators', curatorsRouter)
 app.use('/api/games', gamesRouter)
+app.use('/api/curators', curatorsRouter)
 
 const port = Number(process.env.PORT || 3000)
 app.listen(port, () => {
